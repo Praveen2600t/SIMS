@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "@/lib/next-server-shim";
 import { AnalyticsService } from "@/services/analytics.service";
 
 export async function GET(req: NextRequest) {

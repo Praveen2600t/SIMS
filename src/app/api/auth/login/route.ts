@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "@/lib/next-server-shim";
 import prisma from "@/lib/prisma";
 import { LoginSchema } from "@/schemas/auth.schema";
 import { verifyPassword, signSessionToken, AUTH_COOKIE_NAME } from "@/lib/auth";

@@ -44,6 +44,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": path.resolve(process.cwd(), "./src"),
+        "next/server": path.resolve(process.cwd(), "./src/lib/next-server-shim.ts"),
       },
     },
     server: {

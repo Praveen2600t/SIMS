@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "@/lib/next-server-shim";
 import { AUTH_COOKIE_NAME } from "@/lib/auth";
 
 export async function POST() {

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "@/lib/next-server-shim";
 import fs from "fs";
 import path from "path";
 

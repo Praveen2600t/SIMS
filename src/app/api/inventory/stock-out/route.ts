@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "@/lib/next-server-shim";
 import { StockOutSchema } from "@/schemas/stock.schema";
 import { InventoryService } from "@/services/inventory.service";
 import { getUserFromRequest } from "@/lib/auth";

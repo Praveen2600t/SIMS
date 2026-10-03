@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "@/lib/next-server-shim";
 import { MonitoringService } from "@/services/monitoring.service";
 import { getUserFromRequest } from "@/lib/auth";
 

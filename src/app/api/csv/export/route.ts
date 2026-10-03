@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "@/lib/next-server-shim";
 import { CSVService } from "@/services/csv.service";
 
 export async function GET() {

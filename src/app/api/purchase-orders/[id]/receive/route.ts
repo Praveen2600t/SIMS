@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "@/lib/next-server-shim";
 import prisma from "@/lib/prisma";
 import { ReceivePurchaseOrderSchema } from "@/schemas/purchase.schema";
 import { InventoryService } from "@/services/inventory.service";
