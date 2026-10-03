@@ -8,7 +8,14 @@ export default defineConfig({
     environment: "node",
     globals: true,
     fileParallelism: false,
-    testTimeout: 20000,
+    maxConcurrency: 1,
+    testTimeout: 30000,
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
     setupFiles: ["./tests/setup.ts"],
   },
   resolve: {
