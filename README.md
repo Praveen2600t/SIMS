@@ -1,184 +1,101 @@
 # Smart Inventory Continuous Monitoring System (SICMS)
-### Daily Stock Analysis, Expiry Surveillance, Low-Stock Detection & Automated Alerts
+### Simple All-In-One Inventory Surveillance, Batch Expiry & Alert System
 
-[![CI Pipeline](https://github.com/example/sicms/actions/workflows/ci.yml/badge.svg)](https://github.com/example/sicms/actions)
 [![Vite](https://img.shields.io/badge/Vite-8.3-646CFF?logo=vite)](https://vitejs.dev/)
 [![React 19](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
 [![React Router 7](https://img.shields.io/badge/React_Router-7-CA4245?logo=react-router)](https://reactrouter.com/)
-[![Prisma ORM](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma)](https://prisma.io/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL_/_Supabase-16-336791?logo=postgresql)](https://supabase.com/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
-[![Vitest](https://img.shields.io/badge/Tests-Vitest%20(100%25%20Passing)-6E9F18?logo=vitest)](https://vitest.dev/)
-[![Vercel Deployment](https://img.shields.io/badge/Deploy-Vercel%20Serverless-black?logo=vercel)](https://vercel.com/)
+[![Tailwind CSS 4](https://img.shields.io/badge/Tailwind-CSS%204-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+[![Deployment](https://img.shields.io/badge/Deploy-Vercel%20%2F%20GitHub-black?logo=vercel)](https://vercel.com/)
 
 ---
 
-## 1. Executive Summary & Core Mission
+## 1. Overview & Architecture
 
-**SICMS** is a generalized, enterprise-grade **Smart Inventory Continuous Monitoring System** engineered to provide continuous stock surveillance, daily stock analysis, perishable shelf-life tracking, stockout prevention, and automated actionable alerts.
+**SICMS** is an all-in-one **Smart Inventory Continuous Monitoring System** built with **Vite, React 19, TypeScript, Tailwind CSS, React Router, Recharts, and browser localStorage**.
 
-Built without regional or industry-specific constraints, SICMS is designed for diverse inventory environments—including industrial raw materials, electronics, pharmaceuticals, FMCG, automotive spares, food processing, packaging supplies, and general enterprise warehouses.
+It provides complete inventory control, batch lot expiry tracking, customer sales dispatch, vendor purchase orders, and continuous surveillance alarms—all running as a self-contained, standalone web application.
 
-### Core System Pillars
-1. **Daily Stock Analysis**: Computes opening stock, inbound stock received today, outbound stock issued or sold today, current balance, and net daily changes.
-2. **Low-Stock & Out-of-Stock Monitoring**: Continuously compares available balance against configurable minimum thresholds, flagging critical zero-stock conditions.
-3. **Lot & Expiry Surveillance**: Batch-level surveillance detecting expired lots and items approaching expiration within configurable warning horizons. Expiry tracking is optional for non-perishable products.
-4. **Explainable Anomaly Detection**: Identifies unusual stock drops (>35% single-movement deductions without dispatch orders) and rapid manual count adjustments (≥3 corrections within 24h).
-5. **Automated Actionable Alerts**: Generates persistent alerts complete with product SKU, batch number, current balance, expiry timeline, alert reason, severity, and specific **Recommended Actions** (e.g. reorder requisition, lot re-allocation, inspection hold).
-6. **Configurable Rules & Thresholds**: Authorized inventory managers can fine-tune warning horizons, anomaly percentages, and adjustment limits on the fly via `/api/monitoring/settings`.
-7. **Audit & History Ledger**: Immutable, dated stock movement records tracking old vs. new balance, movement reasons, user attributions, and references.
-8. **Multi-Format CSV Engine**: High-performance RFC-4180 CSV importer with duplicate detection, row-level error reporting, and live database inventory export.
+### Why this Architecture?
+* **Zero External Server Dependencies:** Runs directly in any modern browser without needing Node backend servers, external databases, or paid APIs.
+* **Instant Vercel Deployment:** Compiles to static web assets (`dist/`) in seconds.
+* **Local Persistence:** All products, batches, stock movements, purchase orders, sales, and alerts persist in browser `localStorage`.
+* **Sample Data Included:** Pre-loaded with realistic products across Electronics, Pharmaceuticals, Packaging, and Raw Materials. A **"Reset to Sample Data"** button lets you restore original demo data anytime.
 
 ---
 
-## 2. Multi-Sector Inventory Scope
+## 2. Views & Feature Navigation
 
-The system ships with a synthetic, realistic dataset generator (`scripts/generate-dataset.ts`) and seeder (`scripts/seed.ts`) covering **10 diverse industrial and commercial categories** across 10 warehouse storage zones:
+All views share a clean, responsive layout with a persistent sidebar, top navigation, active alert badges, and mobile drawer:
 
-| Category | Sample Items | Storage Environments |
-|---|---|---|
-| **Electronics & Semiconductors** | Microcontroller Boards (ESP32), Op-Amps, OLED Displays, SMD Capacitors | Controlled Humidity & Temp |
-| **Pharmaceuticals & Medical** | Paracetamol Tablets, Amoxicillin Capsules, Sterile Saline Infusions, PPE | Cleanroom & Bio-Storage |
-| **Industrial Raw Materials** | Polypropylene Granules, Aluminum Extrusions, Stainless Steel Fasteners | Bulk Material Depots |
-| **FMCG & Packaged Goods** | Detergent Powder, Liquid Handwash, Toiletries, Cleaning Agents | Ambient General Racks |
-| **Food & Perishables** | Durum Semolina, Dairy Products, Cooking Oils, Spices | Cold Storage Vaults (2–8°C / -20°C) |
-| **Automotive & Machinery Spares** | Oil Filters, Brake Pads, Drive Belts, Hydraulic Seals | Heavy Parts Warehouse |
-| **Laboratory Chemicals & Reagents**| Ethanol 99.9%, Hydrochloric Acid 37%, Sodium Hydroxide Pellets | Flammable & Hazmat Bays |
-| **Packaging & Shipping Supplies** | Corrugated Shipping Boxes, Stretch Films, Bubble Rolls | Fast-Pick Staging Bays |
-| **Hardware & Fasteners** | Hex Bolts, Drill Bits, Anchor Fasteners, Cable Ties | High-Density Drawer Units |
-| **Office & IT Equipment** | Ethernet Patch Cables, Thermal Paper Rolls, Toner Cartridges | Standard Shelving |
+| Route | View Name | Description |
+| :--- | :--- | :--- |
+| `/` | **Dashboard** | Real-time KPI metrics, stock health gauge, automated surveillance alarms, and movement volume chart. |
+| `/products` | **Product Catalogue** | Full CRUD for products, SKU management, safety stock thresholds, categories, search, filtering, and CSV export. |
+| `/inventory` | **Stock Movements & Batches** | Stock In (+), Stock Out (-), Cycle Count Audits, Batch Expiry Tracker, and complete immutable movement ledger. |
+| `/monitoring` | **Continuous Surveillance** | Automated alert rule engine (Low Stock, Depleted Zero Stock, Expired Lots, Upcoming 30-Day Expiry, Rapid Depletions) with acknowledge/resolve actions. |
+| `/suppliers` | **Suppliers & Purchase Orders** | Manage authorized vendor details and issue POs; marking a PO as received automatically updates inventory balances. |
+| `/sales` | **Sales & Revenue Tracking** | Record customer dispatches with automatic stock verification, invoice generation, payment methods, and revenue totals. |
+| `/reports` | **Daily Stock Reports & Analytics** | Stock valuation summaries, inventory health breakdown, category valuation bars, and 60-day expiry watchlist. |
+| `/csv-manager` | **CSV Dataset Manager** | Bulk-import inventory CSV files with column validation, error/duplicate detection, row preview, and sample template download. |
 
 ---
 
-## 3. Continuous Monitoring Logic
+## 3. Continuous Surveillance Rules
 
-The system's autonomous continuous monitoring engine (`src/services/monitoring.service.ts`) executes:
-- **On Every Inventory Change**: When stock is received, issued, adjusted, or reconciled.
-- **On Scheduled Periodic Intervals**: Configurable cron / worker execution via `/api/monitoring/run`.
-- **On-Demand**: From the UI dashboard and monitoring consoles.
+The autonomous rule engine evaluates after every stock modification and whenever views open:
 
-### Alert Classification Matrix
-- **`OUT_OF_STOCK` (Severity: CRITICAL)**: Current quantity ≤ 0.
-  - *Recommended Action*: Trigger emergency replenishment purchase order or halt downstream manufacturing/dispatch.
-- **`LOW_STOCK` (Severity: HIGH)**: Current quantity ≤ `minStockLevel`.
-  - *Recommended Action*: Issue reorder requisition for target quantity before stock exhausts.
-- **`EXPIRY_WARNING` (Severity: MEDIUM)**: Batch expiry date within configured `expiryWarningDays` (default: 14 days).
-  - *Recommended Action*: Expedite dispatch (FEFO), reallocate to high-velocity orders, or initiate promotional markdown.
-- **`EXPIRED` (Severity: CRITICAL)**: Batch expiry date has passed and remaining quantity > 0.
-  - *Recommended Action*: Quarantine lot immediately, transfer to salvage/destruction holding area, and record disposal movement.
-- **`ANOMALY_REVIEW` (Severity: HIGH)**: Sudden stock drops exceeding `anomalyDropPercentage` (default: 35%) or ≥ `rapidAdjustmentLimit` (default: 3) manual adjustments in 24 hours.
-  - *Recommended Action*: Conduct physical cycle count audit and inspect CCTV/access logs for unaccounted shrinkage.
-
-Alerts are idempotently created or updated, avoiding duplicate alert flooding, and are **automatically resolved** when inventory is replenished above threshold levels.
+1. **Out of Stock (CRITICAL):** Triggers when product balance reaches `0`.
+2. **Low Stock (WARNING):** Triggers when current stock falls at or below the product's `minStock` safety threshold.
+3. **Expired Batch (CRITICAL):** Triggers when an active batch's expiration date is in the past.
+4. **Near Expiry (WARNING):** Triggers when an active batch reaches its 30-day expiration window.
+5. **Rapid Stock Depletion (INFO):** Detects single dispatches reducing previous stock by >50%.
 
 ---
 
-## 4. Architecture & Technical Stack
-
-```mermaid
-graph TD
-  Client[Web Browser / Responsive SPA] --> Vite[Vite + React Router SPA]
-  Vite --> API[Vercel Serverless Functions /api]
-  API --> MonitorSvc[Continuous Monitoring Engine]
-  API --> InventorySvc[Inventory Consistency Service]
-  API --> AnalyticsSvc[Daily Stock Analysis Service]
-  API --> CSVSvc[RFC-4180 CSV Import/Export Engine]
-  Cron[Vercel Cron 0 0 * * *] --> MonitorSvc
-  MonitorSvc --> Prisma[Prisma ORM 6.19]
-  InventorySvc --> Prisma
-  AnalyticsSvc --> Prisma
-  CSVSvc --> Prisma
-  Prisma --> Postgres[(Supabase / PostgreSQL)]
-```
-
-- **Frontend**: Vite 8, React 19, React Router 7, Tailwind CSS 4, Lucide Icons, Recharts.
-- **Backend & Serverless Functions**: Vercel Serverless Functions (`api/index.ts` & `api/monitoring/run.ts`), Node.js, Zod Validation, Jose (JWT Authentication), Bcryptjs.
-- **Database**: Supabase / PostgreSQL 16 managed via Prisma ORM with atomic `$transaction` consistency.
-- **Testing**: Vitest 5 with isolated unit and integration suites (100% Passing).
-
----
-
-## 5. Quick Start & Local Setup
+## 4. Local Development
 
 ### Prerequisites
-- **Node.js** v20.x or v24.x
-- **npm** v10+
+* Node.js 18+ installed
 
-### Installation Steps
-
-1. **Clone the repository**:
-   ```bash
-   git clone <repo-url>
-   cd SICMS
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install --legacy-peer-deps
-   ```
-
-3. **Configure Environment Variables**:
-   Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. **Initialize Database**:
-   Synchronize schema tables using Prisma:
-   ```bash
-   npm run db:push
-   ```
-
-5. **Seed Generalized Multi-Sector Dataset**:
-   Populates administrative users, categories, warehouse zones, suppliers, 200 items, batches, movements, and initial alerts:
-   ```bash
-   npm run db:seed
-   ```
-
-6. **Start the Development Server**:
-   ```bash
-   npm run dev
-   ```
-   Access the dashboard at: `http://localhost:3000`
-
----
-
-## 6. Default Credentials
-
-| Role | Email | Password | Access Level |
-|---|---|---|---|
-| **Administrator** | `admin@sicms.io` | `Admin@12345` | Full system access, rule configuration, audit ledger, and user management |
-| **Inventory Officer** | `staff@sicms.io` | `Staff@12345` | Stock receipts, dispatches, audits, and alert acknowledgments |
-
----
-
-## 7. Testing & Quality Assurance
-
-The codebase includes automated tests validating core business rules:
-
+### Setup & Run
 ```bash
-# Run Vitest test suite
-npm test
+# 1. Clone repository
+git clone https://github.com/Praveen2600t/SIMS.git
+cd SIMS
 
-# Run production build
-npm run build
+# 2. Install dependencies
+npm install
+
+# 3. Start local development server
+npm run dev
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+
+---
+
+## 5. Deployment Instructions
+
+### Deploy to GitHub
+```bash
+git add -A
+git commit -m "feat: complete all-in-one inventory surveillance system"
+git push origin main
 ```
 
-### Verified Test Suites
-- `tests/inventory.service.test.ts`: Atomic stock-in, stock-out, strict shortage rejection, and audit reconciliation.
-- `tests/monitoring.service.test.ts`: Low-stock, out-of-stock, expiry warning horizons, and replenishment auto-resolution.
-- `tests/csv.service.test.ts`: RFC-4180 parsing, serialization, duplicate detection, and row-level error reporting.
+### Deploy to Vercel (1-Click)
+1. Log in to [Vercel](https://vercel.com).
+2. Click **Add New... > Project** and import your GitHub repository (`Praveen2600t/SIMS`).
+3. Vercel automatically detects the Vite preset:
+   - **Framework Preset:** `Vite`
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `dist`
+4. **Environment Variables:** None required! (The app runs standalone with zero backend dependencies).
+5. Click **Deploy**.
 
 ---
 
-## 8. Deployment
+## 6. Data Storage & Privacy Note
 
-For serverless deployments (e.g. Vercel):
-- Database connection strings should configure pooling via PgBouncer or Supabase / Neon connection pooler.
-- Scheduled monitoring is triggered via Vercel Cron Jobs configured in `vercel.json` targeting `/api/monitoring/run` with `CRON_SECRET` authorization header.
-
----
-
-## 9. License
-
-MIT License. Designed and engineered for production smart inventory continuous monitoring.
+All data modifications (products created, stock movements, batches, sales) are stored inside the browser's `localStorage`.
+* Data remains on the device/browser where it was entered.
+* Clicking **"Reset Sample Data"** in the sidebar restores the default catalog and transactions at any time.
