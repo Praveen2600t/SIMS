@@ -2,12 +2,14 @@
 ### Daily Stock Analysis, Expiry Surveillance, Low-Stock Detection & Automated Alerts
 
 [![CI Pipeline](https://github.com/example/sicms/actions/workflows/ci.yml/badge.svg)](https://github.com/example/sicms/actions)
-[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-8.3-646CFF?logo=vite)](https://vitejs.dev/)
 [![React 19](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
+[![React Router 7](https://img.shields.io/badge/React_Router-7-CA4245?logo=react-router)](https://reactrouter.com/)
 [![Prisma ORM](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma)](https://prisma.io/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://postgresql.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL_/_Supabase-16-336791?logo=postgresql)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
 [![Vitest](https://img.shields.io/badge/Tests-Vitest%20(100%25%20Passing)-6E9F18?logo=vitest)](https://vitest.dev/)
+[![Vercel Deployment](https://img.shields.io/badge/Deploy-Vercel%20Serverless-black?logo=vercel)](https://vercel.com/)
 
 ---
 
@@ -75,24 +77,24 @@ Alerts are idempotently created or updated, avoiding duplicate alert flooding, a
 
 ```mermaid
 graph TD
-  Client[Web Browser / Responsive UI] --> Next[Next.js 16 App Router]
-  Next --> AuthMiddleware[Edge JWT Authentication]
-  AuthMiddleware --> API[RESTful API Endpoints]
+  Client[Web Browser / Responsive SPA] --> Vite[Vite + React Router SPA]
+  Vite --> API[Vercel Serverless Functions /api]
   API --> MonitorSvc[Continuous Monitoring Engine]
   API --> InventorySvc[Inventory Consistency Service]
   API --> AnalyticsSvc[Daily Stock Analysis Service]
   API --> CSVSvc[RFC-4180 CSV Import/Export Engine]
+  Cron[Vercel Cron 0 0 * * *] --> MonitorSvc
   MonitorSvc --> Prisma[Prisma ORM 6.19]
   InventorySvc --> Prisma
   AnalyticsSvc --> Prisma
   CSVSvc --> Prisma
-  Prisma --> Postgres[(PostgreSQL Database)]
+  Prisma --> Postgres[(Supabase / PostgreSQL)]
 ```
 
-- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS, Lucide Icons, Recharts.
-- **Backend**: Next.js Route Handlers, Zod Validation, Jose (JWT Authentication), Bcryptjs.
-- **Database**: PostgreSQL 16 managed via Prisma ORM with atomic `$transaction` consistency.
-- **Testing**: Vitest 5 with isolated unit and integration suites.
+- **Frontend**: Vite 8, React 19, React Router 7, Tailwind CSS 4, Lucide Icons, Recharts.
+- **Backend & Serverless Functions**: Vercel Serverless Functions (`api/index.ts` & `api/monitoring/run.ts`), Node.js, Zod Validation, Jose (JWT Authentication), Bcryptjs.
+- **Database**: Supabase / PostgreSQL 16 managed via Prisma ORM with atomic `$transaction` consistency.
+- **Testing**: Vitest 5 with isolated unit and integration suites (100% Passing).
 
 ---
 

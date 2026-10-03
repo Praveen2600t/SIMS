@@ -1,8 +1,6 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter, usePathname } from "next/navigation";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 
@@ -15,15 +13,16 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, title, subtitle, onRefresh }: AppLayoutProps) {
   const { user, loading } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const pathname = location.pathname;
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user && pathname !== "/login") {
-      router.push("/login");
+      navigate("/login");
     }
-  }, [user, loading, router, pathname]);
+  }, [user, loading, navigate, pathname]);
 
   if (loading) {
     return (

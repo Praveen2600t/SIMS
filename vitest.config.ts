@@ -9,10 +9,11 @@ export default defineConfig({
     globals: true,
     fileParallelism: false,
     testTimeout: 20000,
+    setupFiles: ["./tests/setup.ts"],
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(process.cwd(), "./src"),
     },
   },
 });

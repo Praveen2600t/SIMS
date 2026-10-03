@@ -1,7 +1,5 @@
-"use client";
-
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 
 export interface User {
   id: string;
@@ -23,8 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
 
   const refreshUser = async () => {
     try {
@@ -58,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: data.error || "Login failed" };
       }
       setUser(data.user);
-      router.push("/dashboard");
+      navigate("/dashboard");
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Network error";
@@ -73,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore
     } finally {
       setUser(null);
-      router.push("/login");
+      navigate("/login");
     }
   };
 

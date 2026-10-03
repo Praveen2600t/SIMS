@@ -1,7 +1,5 @@
-"use client";
-
 import React from "react";
-import { usePathname } from "next/navigation";
+import { useLocation, Link } from "react-router-dom";
 import {
   LayoutDashboard,
   Package,
@@ -30,7 +28,8 @@ const NAV_ITEMS = [
 ];
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const pathname = usePathname();
+  const location = useLocation();
+  const pathname = location.pathname;
   const { user } = useAuth();
 
   return (
@@ -71,9 +70,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             const Icon = item.icon;
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
-              <a
+              <Link
                 key={item.href}
-                href={item.href}
+                to={item.href}
                 onClick={onClose}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
@@ -83,7 +82,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
               >
                 <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
                 <span>{item.label}</span>
-              </a>
+              </Link>
             );
           })}
         </nav>
