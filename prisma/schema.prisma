@@ -1,0 +1,364 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  SALE
+  RETURN
+  DAMAGE
+  AUDIT
+}
+
+enum BatchStatus {
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  QUARANTINED
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  PENDING
+  APPROVED
+  RECEIVED
+  PARTIALLY_RECEIVED
+  CANCELLED
+}
+
+enum AlertType {
+  LOW_STOCK
+  OUT_OF_STOCK
+  EXPIRY_WARNING
+  EXPIRED
+  ANOMALY_REVIEW
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         UserRole  @default(STAFF)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  stockMovements  StockMovement[]
+  sales           Sale[]
+  purchaseOrders  PurchaseOrder[]
+  resolvedAlerts  Alert[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Location {
+  id             String    @id @default(cuid())
+  name           String
+  district       String
+  marketLocation String
+  type           String    @default("CENTRAL_MARKET")
+  address        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  products       Product[]
+  batches        InventoryBatch[]
+  sales          Sale[]
+
+  @@map("locations")
+}
+
+model Supplier {
+  id           String    @id @default(cuid())
+  supplierCode String    @unique
+  name         String
+  contactPerson String?
+  email        String?
+  phone        String?
+  address      String?
+  district     String
+  rating       Float     @default(4.5)
+  isActive     Boolean   @default(true)
+  isSampleData Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  products       Product[]
+  batches        InventoryBatch[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  productCode     String    @unique
+  name            String
+  categoryId      String
+  subcategory     String
+  unit            String    @default("kg")
+  purchasePrice   Float     @default(0)
+  sellingPrice    Float     @default(0)
+  currentQuantity Float     @default(0)
+  minStockLevel   Float     @default(10)
+  reorderQuantity Float     @default(50)
+  storageType     String    @default("ROOM_TEMP")
+  district        String
+  marketLocation  String
+  supplierId      String?
+  locationId      String?
+  dataSource      String    @default("TAMIL_NADU_DEMO_DATA")
+  isSampleData    Boolean   @default(true)
+  isArchived      Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  category        Category  @relation(fields: [categoryId], references: [id])
+  supplier        Supplier? @relation(fields: [supplierId], references: [id])
+  location        Location? @relation(fields: [locationId], references: [id])
+
+  batches            InventoryBatch[]
+  stockMovements     StockMovement[]
+  saleItems          SaleItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  alerts             Alert[]
+
+  @@index([categoryId])
+  @@index([district])
+  @@index([marketLocation])
+  @@index([supplierId])
+  @@map("products")
+}
+
+model InventoryBatch {
+  id              String      @id @default(cuid())
+  productId       String
+  batchNumber     String
+  quantity        Float
+  initialQuantity Float
+  manufactureDate DateTime?
+  expiryDate      DateTime?
+  purchasePrice   Float       @default(0)
+  supplierId      String?
+  locationId      String?
+  status          BatchStatus @default(ACTIVE)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  product         Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier        Supplier?   @relation(fields: [supplierId], references: [id])
+  location        Location?   @relation(fields: [locationId], references: [id])
+
+  movements       StockMovement[]
+  saleItems       SaleItem[]
+  alerts          Alert[]
+
+  @@unique([productId, batchNumber])
+  @@index([productId])
+  @@index([expiryDate])
+  @@index([status])
+  @@map("inventory_batches")
+}
+
+model StockMovement {
+  id                String       @id @default(cuid())
+  productId         String
+  batchId           String?
+  movementType      MovementType
+  quantity          Float
+  previousQuantity  Float
+  newQuantity       Float
+  reason            String
+  referenceType     String?
+  referenceId       String?
+  unitPrice         Float?
+  performedByUserId String?
+  createdAt         DateTime     @default(now())
+
+  product           Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batch             InventoryBatch? @relation(fields: [batchId], references: [id])
+  performedBy       User?        @relation(fields: [performedByUserId], references: [id])
+
+  @@index([productId])
+  @@index([movementType])
+  @@index([createdAt])
+  @@map("stock_movements")
+}
+
+model Sale {
+  id              String        @id @default(cuid())
+  invoiceNumber   String        @unique
+  customerName    String?
+  customerPhone   String?
+  totalAmount     Float         @default(0)
+  paymentStatus   PaymentStatus @default(PAID)
+  paymentMethod   String        @default("UPI")
+  locationId      String?
+  createdByUserId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  location        Location?     @relation(fields: [locationId], references: [id])
+  createdBy       User?         @relation(fields: [createdByUserId], references: [id])
+  items           SaleItem[]
+
+  @@index([createdAt])
+  @@map("sales")
+}
+
+model SaleItem {
+  id         String          @id @default(cuid())
+  saleId     String
+  productId  String
+  batchId    String?
+  quantity   Float
+  unitPrice  Float
+  totalPrice Float
+  createdAt  DateTime        @default(now())
+
+  sale       Sale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product    Product         @relation(fields: [productId], references: [id])
+  batch      InventoryBatch? @relation(fields: [batchId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(cuid())
+  orderNumber          String              @unique
+  supplierId           String
+  orderDate            DateTime            @default(now())
+  expectedDeliveryDate DateTime?
+  status               PurchaseOrderStatus @default(PENDING)
+  totalCost            Float               @default(0)
+  notes                String?
+  createdByUserId      String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  supplier             Supplier            @relation(fields: [supplierId], references: [id])
+  createdBy            User?               @relation(fields: [createdByUserId], references: [id])
+  items                PurchaseOrderItem[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  quantity        Float
+  receivedQuantity Float        @default(0)
+  unitCost        Float
+  totalCost       Float
+  createdAt       DateTime      @default(now())
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+model Alert {
+  id               String        @id @default(cuid())
+  productId        String?
+  batchId          String?
+  alertType        AlertType
+  severity         AlertSeverity @default(MEDIUM)
+  status           AlertStatus   @default(OPEN)
+  message          String
+  detailsJson      String?
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batch            InventoryBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  resolvedBy       User?           @relation(fields: [resolvedByUserId], references: [id])
+
+  @@index([productId])
+  @@index([alertType])
+  @@index([status])
+  @@index([severity])
+  @@map("alerts")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String?
+  detailsJson String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}

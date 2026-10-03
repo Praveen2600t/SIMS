@@ -1,0 +1,60 @@
+name: SICMS CI Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-test:
+    name: Lint, Test, and Build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: sicms_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run Prisma DB Push (Test DB)
+        run: npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/sicms_test_db?schema=public&pgbouncer=true"
+
+      - name: Run Automated Vitest Tests
+        run: npm test
+        env:
+          DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/sicms_test_db?schema=public&pgbouncer=true"
+          JWT_SECRET: "ci_test_secret_32_characters_long_key"
+
+      - name: Verify Next.js Production Build
+        run: npm run build
+        env:
+          DATABASE_URL: "postgresql://postgres:postgrespassword@localhost:5432/sicms_test_db?schema=public&pgbouncer=true"
+          JWT_SECRET: "ci_test_secret_32_characters_long_key"
