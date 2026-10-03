@@ -10,12 +10,6 @@ export default defineConfig({
     fileParallelism: false,
     maxConcurrency: 1,
     testTimeout: 30000,
-    pool: "forks",
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
     setupFiles: ["./tests/setup.ts"],
   },
   resolve: {
