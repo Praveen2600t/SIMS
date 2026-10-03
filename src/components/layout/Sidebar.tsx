@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   ShieldCheck,
   Cpu,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/sales", label: "Outbound Dispatches", icon: ShoppingCart },
   { href: "/reports", label: "Daily Analysis & Reports", icon: BarChart3 },
   { href: "/csv-manager", label: "Dataset Hub & Import", icon: FileSpreadsheet },
+  { href: "/mcp-hub", label: "MCP & Stitch UI/UX", icon: Sparkles },
 ];
 
 export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
