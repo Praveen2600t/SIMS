@@ -3,84 +3,47 @@ import prisma from "@/lib/prisma";
 export class AnalyticsService {
   /**
    * Fetches centralized real-time dashboard metrics calculated directly from the database.
+   * Performs safe sequential batches to respect connection pool limits.
    */
   static async getDashboardMetrics() {
     const now = new Date();
     const expiryWarningDate = new Date();
-    expiryWarningDate.setDate(now.getDate() + 7);
+    expiryWarningDate.setDate(now.getDate() + 14);
 
-    // Parallel aggregate queries for maximum performance
-    const [
-      totalProducts,
-      products,
-      categories,
-      activeAlerts,
-      recentMovements,
-      totalSalesAgg,
-      recentSales,
-      expiringBatches,
-      expiredBatches,
-    ] = await Promise.all([
-      // 1. Total products count
-      prisma.product.count({ where: { isArchived: false } }),
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
 
-      // 2. Products for stock metrics, values, and location breakdowns
-      prisma.product.findMany({
-        where: { isArchived: false },
-        select: {
-          id: true,
-          currentQuantity: true,
-          minStockLevel: true,
-          purchasePrice: true,
-          sellingPrice: true,
-          district: true,
-          categoryId: true,
-        },
-      }),
+    // Batch 1: Products & Categories
+    const totalProducts = await prisma.product.count({ where: { isArchived: false } });
+    const products = await prisma.product.findMany({
+      where: { isArchived: false },
+      select: {
+        id: true,
+        name: true,
+        productCode: true,
+        currentQuantity: true,
+        minStockLevel: true,
+        purchasePrice: true,
+        sellingPrice: true,
+        storageLocation: true,
+        categoryId: true,
+      },
+    });
 
-      // 3. Categories
-      prisma.category.findMany({
-        select: { id: true, name: true, code: true },
-      }),
+    const categories = await prisma.category.findMany({
+      select: { id: true, name: true, code: true },
+    });
 
-      // 4. Open alerts
+    // Batch 2: Alerts & Expiries
+    const [openAlerts, expiringBatches, expiredBatches] = await Promise.all([
       prisma.alert.findMany({
         where: { status: "OPEN" },
         include: {
-          product: { select: { name: true, district: true, unit: true } },
+          product: { select: { name: true, productCode: true, unit: true, storageLocation: true } },
         },
-        orderBy: { createdAt: "desc" },
-        take: 10,
+        orderBy: [{ severity: "asc" }, { createdAt: "desc" }],
+        take: 12,
       }),
-
-      // 5. Recent stock movements
-      prisma.stockMovement.findMany({
-        take: 8,
-        orderBy: { createdAt: "desc" },
-        include: {
-          product: { select: { name: true, productCode: true, unit: true, district: true } },
-          performedBy: { select: { name: true, role: true } },
-        },
-      }),
-
-      // 6. Total sales
-      prisma.sale.aggregate({
-        _sum: { totalAmount: true },
-        _count: { id: true },
-      }),
-
-      // 7. Recent sales
-      prisma.sale.findMany({
-        take: 5,
-        orderBy: { createdAt: "desc" },
-        include: {
-          items: {
-            include: { product: { select: { name: true } } },
-          },
-        },
-      }),
-
-      // 8. Batches expiring within 7 days
       prisma.inventoryBatch.count({
         where: {
           status: "ACTIVE",
@@ -91,8 +54,6 @@ export class AnalyticsService {
           },
         },
       }),
-
-      // 9. Expired batches with quantity > 0
       prisma.inventoryBatch.count({
         where: {
           status: "EXPIRED",
@@ -101,13 +62,53 @@ export class AnalyticsService {
       }),
     ]);
 
-    // Calculate core metrics
+    // Batch 3: Recent Movements & Sales
+    const [recentMovements, todayMovements, totalSalesAgg, recentSales] = await Promise.all([
+      prisma.stockMovement.findMany({
+        take: 8,
+        orderBy: { createdAt: "desc" },
+        include: {
+          product: { select: { name: true, productCode: true, unit: true, storageLocation: true } },
+          performedBy: { select: { name: true, role: true } },
+        },
+      }),
+      prisma.stockMovement.findMany({
+        where: { createdAt: { gte: startOfDay } },
+        select: { movementType: true, quantity: true },
+      }),
+      prisma.sale.aggregate({
+        _sum: { totalAmount: true },
+        _count: { id: true },
+      }),
+      prisma.sale.findMany({
+        take: 5,
+        orderBy: { createdAt: "desc" },
+        include: {
+          items: {
+            include: { product: { select: { name: true, productCode: true } } },
+          },
+        },
+      }),
+    ]);
+
+    // Daily Stock Analysis
+    let receivedToday = 0;
+    let issuedToday = 0;
+    for (const m of todayMovements) {
+      if (m.movementType === "IN" || m.movementType === "RETURN") {
+        receivedToday += m.quantity;
+      } else if (m.movementType === "OUT" || m.movementType === "SALE" || m.movementType === "DAMAGE") {
+        issuedToday += m.quantity;
+      }
+    }
+
+    // Core stock counts and inventory valuation
     let totalInventoryValue = 0;
     let totalStockUnits = 0;
     let lowStockCount = 0;
     let outOfStockCount = 0;
 
-    const districtMap = new Map<string, { count: number; value: number; stock: number }>();
+    const locationMap = new Map<string, { count: number; value: number; stock: number }>();
     const categoryMap = new Map<string, { count: number; value: number }>();
 
     for (const p of products) {
@@ -121,13 +122,13 @@ export class AnalyticsService {
         lowStockCount++;
       }
 
-      // District aggregation
-      const dist = p.district || "Other";
-      const existingDist = districtMap.get(dist) || { count: 0, value: 0, stock: 0 };
-      districtMap.set(dist, {
-        count: existingDist.count + 1,
-        value: existingDist.value + itemValue,
-        stock: existingDist.stock + p.currentQuantity,
+      // Warehouse / Storage Zone aggregation
+      const loc = p.storageLocation || "Central Warehouse";
+      const existingLoc = locationMap.get(loc) || { count: 0, value: 0, stock: 0 };
+      locationMap.set(loc, {
+        count: existingLoc.count + 1,
+        value: existingLoc.value + itemValue,
+        stock: existingLoc.stock + p.currentQuantity,
       });
 
       // Category aggregation
@@ -139,30 +140,46 @@ export class AnalyticsService {
       });
     }
 
-    // Format category distribution
     const categoryNameLookup = new Map(categories.map((c) => [c.id, c.name]));
     const categoryDistribution = Array.from(categoryMap.entries()).map(([catId, data]) => ({
       categoryId: catId,
-      name: categoryNameLookup.get(catId) || "Unknown",
+      name: categoryNameLookup.get(catId) || "General",
       productsCount: data.count,
       inventoryValue: Math.round(data.value),
     }));
 
-    // Format district distribution (sorted by inventory value)
-    const districtDistribution = Array.from(districtMap.entries())
-      .map(([district, data]) => ({
-        district,
+    const storageDistribution = Array.from(locationMap.entries())
+      .map(([location, data]) => ({
+        location,
         productsCount: data.count,
         totalStock: Math.round(data.stock),
         inventoryValue: Math.round(data.value),
       }))
       .sort((a, b) => b.inventoryValue - a.inventoryValue);
 
-    // Open alerts counts by severity
-    const openAlertsCount = await prisma.alert.count({ where: { status: "OPEN" } });
-    const criticalAlertsCount = await prisma.alert.count({
-      where: { status: "OPEN", severity: "CRITICAL" },
-    });
+    const openAlertsCount = openAlerts.length;
+    const criticalAlertsCount = openAlerts.filter((a) => a.severity === "CRITICAL").length;
+
+    // Daily Stock Balance Analysis Summary
+    const dailyStockAnalysis = {
+      openingStock: Math.max(0, Math.round(totalStockUnits - receivedToday + issuedToday)),
+      receivedToday: Math.round(receivedToday),
+      issuedToday: Math.round(issuedToday),
+      closingStock: Math.round(totalStockUnits),
+      netDailyChange: Math.round(receivedToday - issuedToday),
+    };
+
+    // Daily Summary Report Object
+    const dailySummary = {
+      totalMonitored: totalProducts,
+      totalStockUnits: Math.round(totalStockUnits),
+      lowStockItems: lowStockCount,
+      outOfStockItems: outOfStockCount,
+      nearExpiryBatches: expiringBatches,
+      expiredBatches: expiredBatches,
+      unresolvedAlerts: openAlertsCount,
+      totalValuation: Math.round(totalInventoryValue),
+    };
 
     return {
       overview: {
@@ -178,47 +195,44 @@ export class AnalyticsService {
         totalSalesRevenue: totalSalesAgg._sum.totalAmount || 0,
         totalSalesOrders: totalSalesAgg._count.id || 0,
       },
+      dailyStockAnalysis,
+      dailySummary,
       categoryDistribution,
-      districtDistribution,
-      recentAlerts: activeAlerts,
+      storageDistribution,
+      recentAlerts: openAlerts,
       recentMovements,
       recentSales,
     };
   }
 
   /**
-   * Reports data: Stock movement velocity, loss/waste report, and supplier order performance.
+   * Generates dated reports across custom day horizons (7, 30, 90 days)
    */
   static async getReportsData(days: number = 30) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const [movementsByType, salesOverTime, alertsSummary] = await Promise.all([
-      // Movement grouped by type
-      prisma.stockMovement.groupBy({
-        by: ["movementType"],
-        where: { createdAt: { gte: startDate } },
-        _count: { id: true },
-        _sum: { quantity: true },
-      }),
+    const movementsByType = await prisma.stockMovement.groupBy({
+      by: ["movementType"],
+      where: { createdAt: { gte: startDate } },
+      _count: { id: true },
+      _sum: { quantity: true },
+    });
 
-      // Sales over past days
-      prisma.sale.findMany({
-        where: { createdAt: { gte: startDate } },
-        select: {
-          id: true,
-          totalAmount: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: "asc" },
-      }),
+    const salesOverTime = await prisma.sale.findMany({
+      where: { createdAt: { gte: startDate } },
+      select: {
+        id: true,
+        totalAmount: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
 
-      // Alerts breakdown
-      prisma.alert.groupBy({
-        by: ["alertType", "status"],
-        _count: { id: true },
-      }),
-    ]);
+    const alertsSummary = await prisma.alert.groupBy({
+      by: ["alertType", "status"],
+      _count: { id: true },
+    });
 
     return {
       movementsByType,

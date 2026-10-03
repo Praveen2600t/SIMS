@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid query parameters", details: parsed.error.format() }, { status: 400 });
     }
 
-    const { page, limit, search, category, district, marketLocation, supplierId, stockStatus, expiryStatus, sortBy, sortOrder } = parsed.data;
+    const { page, limit, search, category, storageLocation, district, marketLocation, supplierId, stockStatus, expiryStatus, sortBy, sortOrder } = parsed.data;
 
     const where: Prisma.ProductWhereInput = {
       isArchived: false,
@@ -37,11 +37,16 @@ export async function GET(req: NextRequest) {
         { name: { contains: search, mode: "insensitive" } },
         { productCode: { contains: search, mode: "insensitive" } },
         { subcategory: { contains: search, mode: "insensitive" } },
+        { storageLocation: { contains: search, mode: "insensitive" } },
       ];
     }
 
     if (category) {
       where.categoryId = category;
+    }
+
+    if (storageLocation) {
+      where.storageLocation = { contains: storageLocation, mode: "insensitive" };
     }
 
     if (district) {

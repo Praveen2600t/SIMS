@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SICMS — Smart Inventory Intelligence System (Tamil Nadu)",
-  description: "Continuous Monitoring & Operational Intelligence for Tamil Nadu Mandis, Retail and Food Supply Chains",
+  title: "SICMS — Smart Inventory Continuous Monitoring System",
+  description: "Continuous Stock Monitoring, Expiry Surveillance, Low-Stock Detection & Automated Alerts",
 };
 
 export default function RootLayout({

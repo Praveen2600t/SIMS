@@ -3,7 +3,7 @@
 ## 1. Prerequisites
 * Node.js v20+ or v24
 * npm v10+
-* Hosted PostgreSQL instance (Supabase, Neon, AWS RDS, or Render)
+* Hosted PostgreSQL instance (Neon, Supabase, AWS RDS, or Render)
 
 ---
 
@@ -14,7 +14,7 @@ cp .env.example .env
 ```
 
 Set the variables:
-* `DATABASE_URL`: Connection string to your hosted PostgreSQL database. If using a connection pooler like Supabase or PgBouncer, append `?pgbouncer=true`.
+* `DATABASE_URL`: Connection string to your hosted PostgreSQL database. If using a connection pooler like PgBouncer, append `?pgbouncer=true`.
 * `JWT_SECRET`: Random 32+ character string for token signing.
 * `NEXT_PUBLIC_APP_URL`: Production URL (e.g., `https://sicms.vercel.app`).
 * `CRON_SECRET`: Secret token for scheduled continuous monitoring triggers.
@@ -27,7 +27,7 @@ Push the schema to your hosted PostgreSQL database:
 npm run db:push
 ```
 
-Seed the initial Tamil Nadu dataset (220+ records, users, suppliers, locations, initial movements, and alerts):
+Seed the multi-sector general inventory dataset (200 records across 10 categories, users, suppliers, warehouse zones, movements, and alerts):
 ```bash
 npm run db:seed
 ```
@@ -53,5 +53,5 @@ Alternatively, use an external scheduler (e.g. GitHub Actions or Cron-job.org) w
 ---
 
 ## 5. Production Pre-seeded User Accounts
-* **Administrator**: `admin@sicms.tn.gov.in` (Password: `AdminPassword123!`)
-* **Staff Member**: `staff@sicms.tn.gov.in` (Password: `StaffPassword123!`)
+* **Administrator**: `admin@sicms.io` (Password: `Admin@12345`)
+* **Inventory Officer**: `staff@sicms.io` (Password: `Staff@12345`)

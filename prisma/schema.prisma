@@ -99,9 +99,9 @@ model Category {
 model Location {
   id             String    @id @default(cuid())
   name           String
-  district       String
-  marketLocation String
-  type           String    @default("CENTRAL_MARKET")
+  district       String?   @default("General Region")
+  marketLocation String?   @default("Central Facility")
+  type           String    @default("WAREHOUSE")
   address        String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -121,7 +121,7 @@ model Supplier {
   email        String?
   phone        String?
   address      String?
-  district     String
+  district     String?   @default("Headquarters")
   rating       Float     @default(4.5)
   isActive     Boolean   @default(true)
   isSampleData Boolean   @default(true)
@@ -141,18 +141,20 @@ model Product {
   name            String
   categoryId      String
   subcategory     String
-  unit            String    @default("kg")
+  unit            String    @default("units")
   purchasePrice   Float     @default(0)
   sellingPrice    Float     @default(0)
   currentQuantity Float     @default(0)
   minStockLevel   Float     @default(10)
+  maxStockLevel   Float?    @default(100)
   reorderQuantity Float     @default(50)
-  storageType     String    @default("ROOM_TEMP")
-  district        String
-  marketLocation  String
+  storageLocation String?   @default("Warehouse A - Shelf 01")
+  storageType     String    @default("STANDARD")
+  district        String?   @default("Central Hub")
+  marketLocation  String?   @default("Main Storage Facility")
   supplierId      String?
   locationId      String?
-  dataSource      String    @default("TAMIL_NADU_DEMO_DATA")
+  dataSource      String    @default("GENERAL_INVENTORY_SYSTEM")
   isSampleData    Boolean   @default(true)
   isArchived      Boolean   @default(false)
   createdAt       DateTime  @default(now())
@@ -169,8 +171,6 @@ model Product {
   alerts             Alert[]
 
   @@index([categoryId])
-  @@index([district])
-  @@index([marketLocation])
   @@index([supplierId])
   @@map("products")
 }
@@ -237,7 +237,7 @@ model Sale {
   customerPhone   String?
   totalAmount     Float         @default(0)
   paymentStatus   PaymentStatus @default(PAID)
-  paymentMethod   String        @default("UPI")
+  paymentMethod   String        @default("CREDIT")
   locationId      String?
   createdByUserId String?
   createdAt       DateTime      @default(now())
@@ -311,22 +311,23 @@ model PurchaseOrderItem {
 }
 
 model Alert {
-  id               String        @id @default(cuid())
-  productId        String?
-  batchId          String?
-  alertType        AlertType
-  severity         AlertSeverity @default(MEDIUM)
-  status           AlertStatus   @default(OPEN)
-  message          String
-  detailsJson      String?
-  resolvedAt       DateTime?
-  resolvedByUserId String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id                String        @id @default(cuid())
+  productId         String?
+  batchId           String?
+  alertType         AlertType
+  severity          AlertSeverity @default(MEDIUM)
+  status            AlertStatus   @default(OPEN)
+  message           String
+  recommendedAction String?
+  detailsJson       String?
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
-  product          Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
-  batch            InventoryBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  resolvedBy       User?           @relation(fields: [resolvedByUserId], references: [id])
+  product           Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batch             InventoryBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  resolvedBy        User?           @relation(fields: [resolvedByUserId], references: [id])
 
   @@index([productId])
   @@index([alertType])

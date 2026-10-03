@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { UserRole } from "@prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET || "sicms_default_jwt_secret_dev_mode_tamilnadu_2026";
+const JWT_SECRET = process.env.JWT_SECRET || "sicms_default_jwt_secret_dev_mode_2026";
 const key = new TextEncoder().encode(JWT_SECRET);
 export const AUTH_COOKIE_NAME = "sicms_auth_token";
 

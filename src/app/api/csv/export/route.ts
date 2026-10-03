@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const csvData = await CSVService.exportProductsCSV();
     const dateStr = new Date().toISOString().split("T")[0];
-    const filename = `tamilnadu_inventory_export_${dateStr}.csv`;
+    const filename = `general_inventory_export_${dateStr}.csv`;
 
     return new NextResponse(csvData, {
       status: 200,

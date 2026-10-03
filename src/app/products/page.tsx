@@ -6,19 +6,14 @@ import { formatINR } from "@/lib/utils";
 import {
   Search,
   Plus,
-  Filter,
-  ArrowUpDown,
   AlertTriangle,
   XCircle,
-  Package,
-  Boxes,
-  MapPin,
+  Warehouse,
   ChevronLeft,
   ChevronRight,
   Eye,
   Trash2,
   X,
-  Check,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -34,11 +29,11 @@ interface Product {
   minStockLevel: number;
   reorderQuantity: number;
   storageType: string;
-  district: string;
-  marketLocation: string;
+  storageLocation?: string | null;
   category: { id: string; name: string };
   supplier?: { id: string; name: string; supplierCode: string } | null;
-  alerts?: { id: string; alertType: string; severity: string; message: string }[];
+  location?: { id: string; name: string; zoneCode: string } | null;
+  alerts?: { id: string; alertType: string; severity: string; message: string; recommendedAction?: string }[];
 }
 
 export default function ProductsPage() {
@@ -52,7 +47,7 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
   const [stockStatus, setStockStatus] = useState("ALL");
   const [expiryStatus, setExpiryStatus] = useState("ALL");
   const [sortBy, setSortBy] = useState("createdAt");
@@ -60,7 +55,7 @@ export default function ProductsPage() {
 
   // Metadata for filter dropdowns
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const [districts, setDistricts] = useState<string[]>([]);
+  const [locations, setLocations] = useState<{ id: string; name: string; zoneCode: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
 
   // Modal State
@@ -73,16 +68,15 @@ export default function ProductsPage() {
     productCode: "",
     name: "",
     categoryId: "",
-    subcategory: "General",
-    unit: "kg",
-    purchasePrice: 0,
-    sellingPrice: 0,
-    currentQuantity: 50,
-    minStockLevel: 15,
-    reorderQuantity: 60,
+    subcategory: "General Inventory",
+    unit: "units",
+    purchasePrice: 150,
+    sellingPrice: 220,
+    currentQuantity: 100,
+    minStockLevel: 25,
+    reorderQuantity: 75,
     storageType: "ROOM_TEMP",
-    district: "Chennai",
-    marketLocation: "Koyambedu Wholesale Market",
+    storageLocation: "Central Distribution Center - Zone A",
     supplierId: "",
   });
 
@@ -106,8 +100,7 @@ export default function ProductsPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.data) {
-          const uniqueDists = Array.from(new Set(data.data.map((l: { district: string }) => l.district))) as string[];
-          setDistricts(uniqueDists);
+          setLocations(data.data);
         }
       });
 
@@ -130,7 +123,7 @@ export default function ProductsPage() {
 
       if (search) params.append("search", search);
       if (selectedCategory) params.append("category", selectedCategory);
-      if (selectedDistrict) params.append("district", selectedDistrict);
+      if (selectedLocation) params.append("storageLocation", selectedLocation);
       if (stockStatus !== "ALL") params.append("stockStatus", stockStatus);
       if (expiryStatus !== "ALL") params.append("expiryStatus", expiryStatus);
 
@@ -146,7 +139,7 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, selectedCategory, selectedDistrict, stockStatus, expiryStatus, sortBy, sortOrder]);
+  }, [page, search, selectedCategory, selectedLocation, stockStatus, expiryStatus, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchProducts();
@@ -204,8 +197,8 @@ export default function ProductsPage() {
 
   return (
     <AppLayout
-      title="Product Inventory Catalogue"
-      subtitle="Cataloguing, District Allocation & Continuous Thresholds"
+      title="Product Inventory Catalog"
+      subtitle="Master Stock Registry, Storage Allocations & Continuous Thresholds"
       onRefresh={fetchProducts}
     >
       <div className="space-y-4">
@@ -217,7 +210,7 @@ export default function ProductsPage() {
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search by SKU code, product name, subcategory..."
+                placeholder="Search by SKU, product name, category, or storage location..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -246,19 +239,19 @@ export default function ProductsPage() {
                 ))}
               </select>
 
-              {/* District Filter */}
+              {/* Storage Location Filter */}
               <select
-                value={selectedDistrict}
+                value={selectedLocation}
                 onChange={(e) => {
-                  setSelectedDistrict(e.target.value);
+                  setSelectedLocation(e.target.value);
                   setPage(1);
                 }}
                 className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-700 focus:border-emerald-500 focus:outline-hidden"
               >
-                <option value="">All Districts</option>
-                {districts.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
+                <option value="">All Warehouse Zones</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.name}>
+                    {loc.name} ({loc.zoneCode})
                   </option>
                 ))}
               </select>
@@ -297,19 +290,18 @@ export default function ProductsPage() {
               <button
                 onClick={() => {
                   setFormData({
-                    productCode: `TN-SKU-${String(Math.floor(1000 + Math.random() * 9000))}`,
+                    productCode: `SKU-${String(Math.floor(1000 + Math.random() * 9000))}`,
                     name: "",
                     categoryId: categories[0]?.id || "",
-                    subcategory: "Agricultural Produce",
-                    unit: "kg",
-                    purchasePrice: 40,
-                    sellingPrice: 55,
+                    subcategory: "General Inventory",
+                    unit: "units",
+                    purchasePrice: 120,
+                    sellingPrice: 180,
                     currentQuantity: 100,
-                    minStockLevel: 20,
-                    reorderQuantity: 80,
+                    minStockLevel: 25,
+                    reorderQuantity: 75,
                     storageType: "ROOM_TEMP",
-                    district: "Coimbatore",
-                    marketLocation: "MGR Wholesale Vegetable Mandi",
+                    storageLocation: locations[0]?.name || "Central Distribution Center - Zone A",
                     supplierId: suppliers[0]?.id || "",
                   });
                   setModalMode("create");
@@ -333,10 +325,10 @@ export default function ProductsPage() {
                   <th className="py-3 px-4">Code / SKU</th>
                   <th className="py-3 px-4">Product Name</th>
                   <th className="py-3 px-4">Category</th>
-                  <th className="py-3 px-4">Location (TN)</th>
+                  <th className="py-3 px-4">Storage Location</th>
                   <th className="py-3 px-4 text-right">Stock Level</th>
                   <th className="py-3 px-4 text-right">Pricing (₹)</th>
-                  <th className="py-3 px-4 text-center">Alerts</th>
+                  <th className="py-3 px-4 text-center">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -346,7 +338,7 @@ export default function ProductsPage() {
                     <td colSpan={8} className="py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
-                        <span>Loading product catalogue...</span>
+                        <span>Loading product catalog...</span>
                       </div>
                     </td>
                   </tr>
@@ -380,12 +372,9 @@ export default function ProductsPage() {
                         </td>
                         <td className="py-3 px-4 text-slate-600">
                           <div className="flex items-center gap-1 font-medium text-slate-800">
-                            <MapPin className="h-3 w-3 text-emerald-600 shrink-0" />
-                            <span>{p.district}</span>
+                            <Warehouse className="h-3 w-3 text-emerald-600 shrink-0" />
+                            <span className="truncate max-w-[200px]">{p.storageLocation || p.location?.name || "General Storage"}</span>
                           </div>
-                          <span className="text-[10px] text-slate-400 block truncate max-w-[160px]">
-                            {p.marketLocation}
-                          </span>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div
@@ -464,28 +453,25 @@ export default function ProductsPage() {
             </table>
           </div>
 
-          {/* Pagination Footer */}
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600 bg-slate-50/50">
-            <div>
-              Showing <span className="font-semibold text-slate-900">{products.length}</span> of{" "}
-              <span className="font-semibold text-slate-900">{total}</span> products
+          {/* Pagination Bar */}
+          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="text-xs text-slate-500">
+              Showing page <span className="font-semibold text-slate-900">{page}</span> of{" "}
+              <span className="font-semibold text-slate-900">{totalPages}</span> ({total} total products)
             </div>
             <div className="flex items-center gap-2">
               <button
                 disabled={page <= 1}
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
                 <span>Prev</span>
               </button>
-              <span className="px-2 font-medium">
-                Page {page} of {totalPages || 1}
-              </span>
               <button
                 disabled={page >= totalPages}
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
               >
                 <span>Next</span>
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -495,13 +481,13 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Modal: Create or View Product */}
+      {/* Modal: View or Create Product */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-scale-in">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h2 className="text-base font-bold text-slate-900">
-                {modalMode === "create" ? "Add New Tamil Nadu Product" : `Product: ${activeProduct?.name}`}
+                {modalMode === "create" ? "Add New Inventory Product" : `Product: ${activeProduct?.name}`}
               </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -551,7 +537,7 @@ export default function ProductsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Salem Malgova Mango / Tanjore Deluxe Rice"
+                    placeholder="e.g. Microcontroller Board ESP32 / Industrial Solenoid Valve"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full rounded-lg border border-slate-200 p-2 text-slate-900"
@@ -560,13 +546,13 @@ export default function ProductsPage() {
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Unit</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Unit of Measure</label>
                     <select
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                       className="w-full rounded-lg border border-slate-200 p-2 text-slate-900"
                     >
-                      {["kg", "g", "litre", "ml", "packet", "piece", "box", "dozen"].map((u) => (
+                      {["units", "pack", "box", "kg", "litre", "roll", "drum", "bundle", "meter"].map((u) => (
                         <option key={u} value={u}>
                           {u}
                         </option>
@@ -621,7 +607,7 @@ export default function ProductsPage() {
                     />
                   </div>
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Reorder Qty</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Reorder Target</label>
                     <input
                       type="number"
                       min={0}
@@ -634,24 +620,30 @@ export default function ProductsPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">District</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Storage Location / Rack</label>
                     <input
                       type="text"
                       required
-                      value={formData.district}
-                      onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                      placeholder="e.g. Warehouse 01 - Shelf B2"
+                      value={formData.storageLocation}
+                      onChange={(e) => setFormData({ ...formData, storageLocation: e.target.value })}
                       className="w-full rounded-lg border border-slate-200 p-2 text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Market Location</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.marketLocation}
-                      onChange={(e) => setFormData({ ...formData, marketLocation: e.target.value })}
+                    <label className="font-semibold text-slate-700 block mb-1">Supplier</label>
+                    <select
+                      value={formData.supplierId}
+                      onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
                       className="w-full rounded-lg border border-slate-200 p-2 text-slate-900"
-                    />
+                    >
+                      <option value="">Select Supplier</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -696,24 +688,29 @@ export default function ProductsPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Location:</span>
+                    <span className="text-slate-400 block">Storage Location:</span>
                     <span className="font-medium text-slate-900">
-                      {activeProduct.marketLocation}, {activeProduct.district}
+                      {activeProduct.storageLocation || activeProduct.location?.name || "General Storage"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Storage:</span>
+                    <span className="text-slate-400 block">Storage Environment:</span>
                     <span className="font-medium text-slate-900">{activeProduct.storageType}</span>
                   </div>
                 </div>
 
                 {activeProduct.alerts && activeProduct.alerts.length > 0 && (
                   <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-3">
-                    <span className="font-semibold text-rose-900 block mb-1">Active Alerts:</span>
+                    <span className="font-semibold text-rose-900 block mb-1">Active Alerts & Action Plan:</span>
                     {activeProduct.alerts.map((al) => (
-                      <p key={al.id} className="text-rose-700">
-                        • {al.message}
-                      </p>
+                      <div key={al.id} className="text-rose-700 mb-1.5 last:mb-0">
+                        <p className="font-medium">• {al.message}</p>
+                        {al.recommendedAction && (
+                          <p className="text-[11px] text-rose-800 ml-3 italic">
+                            Action: {al.recommendedAction}
+                          </p>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}

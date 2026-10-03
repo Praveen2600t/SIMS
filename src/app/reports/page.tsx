@@ -154,8 +154,8 @@ export default function ReportsPage() {
           {/* Sales Revenue Trend Chart */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
             <div className="mb-4">
-              <h2 className="text-sm font-bold text-slate-900">Sales Invoicing Trajectory (₹)</h2>
-              <p className="text-xs text-slate-500">Daily revenue realized from mandi dispatches</p>
+              <h2 className="text-sm font-bold text-slate-900">Outbound Order Value Trajectory (₹)</h2>
+              <p className="text-xs text-slate-500">Daily transaction volume realized from inventory dispatches</p>
             </div>
 
             <div className="h-72 w-full">

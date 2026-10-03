@@ -11,7 +11,7 @@ export interface ImportResult {
 
 export class CSVService {
   /**
-   * Generates a complete CSV export of all inventory products with active batches.
+   * Generates a complete CSV export of all inventory items with active lots/batches.
    */
   static async exportProductsCSV(): Promise<string> {
     const products = await prisma.product.findMany({
@@ -37,14 +37,14 @@ export class CSVService {
         subcategory: p.subcategory,
         product_code: p.productCode,
         unit: p.unit,
-        district: p.district,
-        market_location: p.marketLocation,
+        storage_location: p.storageLocation || "Central Warehouse",
         supplier_id: p.supplier?.supplierCode ?? "",
-        supplier_name: p.supplier?.name ?? "Direct Market Farmer",
+        supplier_name: p.supplier?.name ?? "Standard Supplier",
         purchase_price: p.purchasePrice,
         selling_price: p.sellingPrice,
         current_quantity: p.currentQuantity,
         minimum_stock_level: p.minStockLevel,
+        maximum_stock_level: p.maxStockLevel ?? p.minStockLevel * 5,
         reorder_quantity: p.reorderQuantity,
         batch_number: batch?.batchNumber ?? `INIT-${p.productCode}`,
         manufacture_date: batch?.manufactureDate ? batch.manufactureDate.toISOString().split("T")[0] : "",
@@ -60,7 +60,7 @@ export class CSVService {
   }
 
   /**
-   * Imports products from CSV text with duplicate detection and error tracking.
+   * Imports products from CSV with duplicate detection, schema validation, and error reporting.
    */
   static async importProductsCSV(csvContent: string): Promise<ImportResult> {
     const rows = parseCSV(csvContent);
@@ -76,12 +76,8 @@ export class CSVService {
       return result;
     }
 
-    // Preload categories and suppliers for fast in-memory matching
-    const [categories, suppliers, locations] = await Promise.all([
-      prisma.category.findMany(),
-      prisma.supplier.findMany(),
-      prisma.location.findMany(),
-    ]);
+    const categories = await prisma.category.findMany();
+    const suppliers = await prisma.supplier.findMany();
 
     const categoryMap = new Map<string, string>();
     categories.forEach((c) => {
@@ -95,37 +91,32 @@ export class CSVService {
       supplierMap.set(s.name.toLowerCase(), s.id);
     });
 
-    const locationMap = new Map<string, string>();
-    locations.forEach((loc) => {
-      locationMap.set(`${loc.district.toLowerCase()}_${loc.marketLocation.toLowerCase()}`, loc.id);
-    });
-
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rowNumber = i + 2; // +1 for 0-index, +1 for header line
+      const rowNumber = i + 2;
 
       try {
-        const productCode = (row["product_code"] || row["product_id"] || "").trim();
+        const productCode = (row["product_code"] || row["product_id"] || row["sku"] || "").trim();
         const productName = (row["product_name"] || row["name"] || "").trim();
-        const categoryName = (row["category"] || "Grocery and Packaged Foods").trim();
-        const subcategory = (row["subcategory"] || "General").trim();
-        const unit = (row["unit"] || "kg").trim();
-        const district = (row["district"] || "Chennai").trim();
-        const marketLocation = (row["market_location"] || "Koyambedu Wholesale Market").trim();
+        const categoryName = (row["category"] || "General Inventory").trim();
+        const subcategory = (row["subcategory"] || "Standard").trim();
+        const unit = (row["unit"] || "units").trim();
+        const storageLocation = (row["storage_location"] || row["market_location"] || "Warehouse Zone A").trim();
         const supplierName = (row["supplier_name"] || "").trim();
         const supplierCode = (row["supplier_id"] || "").trim();
         const purchasePrice = parseFloat(row["purchase_price"] || "0") || 0;
         const sellingPrice = parseFloat(row["selling_price"] || "0") || 0;
         const currentQuantity = parseFloat(row["current_quantity"] || "0") || 0;
-        const minStockLevel = parseFloat(row["minimum_stock_level"] || "10") || 10;
+        const minStockLevel = parseFloat(row["minimum_stock_level"] || row["min_stock"] || "10") || 10;
+        const maxStockLevel = parseFloat(row["maximum_stock_level"] || "100") || 100;
         const reorderQuantity = parseFloat(row["reorder_quantity"] || "50") || 50;
-        const storageType = (row["storage_type"] || "ROOM_TEMP").toUpperCase();
-        const batchNumber = (row["batch_number"] || `B-${Date.now().toString().slice(-6)}`).trim();
+        const storageType = (row["storage_type"] || "STANDARD").toUpperCase();
+        const batchNumber = (row["batch_number"] || row["lot_number"] || `LOT-${Date.now().toString().slice(-6)}`).trim();
         const mfgDateStr = row["manufacture_date"]?.trim();
         const expDateStr = row["expiry_date"]?.trim();
 
         if (!productCode) {
-          result.errors.push({ row: rowNumber, message: "Missing required product_code" });
+          result.errors.push({ row: rowNumber, message: "Missing required product_code / SKU" });
           result.skipped++;
           continue;
         }
@@ -139,19 +130,19 @@ export class CSVService {
         // Find or create category
         let categoryId = categoryMap.get(categoryName.toLowerCase());
         if (!categoryId) {
-          const code = categoryName.toUpperCase().replace(/\s+/g, "_").slice(0, 20);
+          const code = categoryName.toUpperCase().replace(/[^A-Z0-9]/g, "_").slice(0, 16);
           const newCat = await prisma.category.create({
             data: {
               name: categoryName,
               code: `${code}_${Date.now().toString().slice(-4)}`,
-              description: `Category ${categoryName}`,
+              description: `Auto-created category ${categoryName}`,
             },
           });
           categoryId = newCat.id;
           categoryMap.set(categoryName.toLowerCase(), newCat.id);
         }
 
-        // Find supplier if specified
+        // Match supplier if provided
         let supplierId: string | null = null;
         if (supplierCode && supplierMap.has(supplierCode.toLowerCase())) {
           supplierId = supplierMap.get(supplierCode.toLowerCase())!;
@@ -159,23 +150,7 @@ export class CSVService {
           supplierId = supplierMap.get(supplierName.toLowerCase())!;
         }
 
-        // Find location
-        const locKey = `${district.toLowerCase()}_${marketLocation.toLowerCase()}`;
-        let locationId = locationMap.get(locKey) ?? null;
-        if (!locationId && district && marketLocation) {
-          const newLoc = await prisma.location.create({
-            data: {
-              name: `${district} - ${marketLocation}`,
-              district,
-              marketLocation,
-              type: "CENTRAL_MARKET",
-            },
-          });
-          locationId = newLoc.id;
-          locationMap.set(locKey, newLoc.id);
-        }
-
-        // Check if product already exists (duplicate detection)
+        // Duplicate detection: check existing product by code
         const existingProduct = await prisma.product.findUnique({
           where: { productCode },
         });
@@ -184,7 +159,7 @@ export class CSVService {
         const expDate = expDateStr ? new Date(expDateStr) : null;
 
         if (existingProduct) {
-          // Update existing product
+          // Update existing item
           await prisma.product.update({
             where: { id: existingProduct.id },
             data: {
@@ -192,20 +167,19 @@ export class CSVService {
               categoryId,
               subcategory,
               unit,
-              district,
-              marketLocation,
+              storageLocation,
               purchasePrice,
               sellingPrice,
               currentQuantity,
               minStockLevel,
+              maxStockLevel,
               reorderQuantity,
               storageType,
               supplierId,
-              locationId,
             },
           });
 
-          // Upsert batch if provided
+          // Upsert lot/batch
           if (batchNumber && currentQuantity > 0) {
             await prisma.inventoryBatch.upsert({
               where: {
@@ -223,7 +197,6 @@ export class CSVService {
                 expiryDate: isNaN(expDate?.getTime() ?? NaN) ? null : expDate,
                 purchasePrice,
                 supplierId,
-                locationId,
                 status: "ACTIVE",
               },
               update: {
@@ -243,22 +216,20 @@ export class CSVService {
               categoryId,
               subcategory,
               unit,
-              district,
-              marketLocation,
+              storageLocation,
               purchasePrice,
               sellingPrice,
               currentQuantity,
               minStockLevel,
+              maxStockLevel,
               reorderQuantity,
               storageType,
               supplierId,
-              locationId,
               dataSource: "CSV_IMPORT",
               isSampleData: row["is_sample_data"] === "true",
             },
           });
 
-          // Create initial batch if quantity > 0
           if (currentQuantity > 0) {
             await prisma.inventoryBatch.create({
               data: {
@@ -270,12 +241,10 @@ export class CSVService {
                 expiryDate: isNaN(expDate?.getTime() ?? NaN) ? null : expDate,
                 purchasePrice,
                 supplierId,
-                locationId,
                 status: "ACTIVE",
               },
             });
 
-            // Initial stock movement record
             await prisma.stockMovement.create({
               data: {
                 productId: newProduct.id,
@@ -293,10 +262,10 @@ export class CSVService {
           result.created++;
         }
       } catch (err: unknown) {
-        const errorMsg = err instanceof Error ? err.message : "Unknown row processing error";
+        const errorMsg = err instanceof Error ? err.message : "Error processing row";
         result.errors.push({
           row: rowNumber,
-          productCode: rows[i]["product_code"],
+          productCode: rows[i]["product_code"] || rows[i]["sku"],
           message: errorMsg,
         });
         result.skipped++;

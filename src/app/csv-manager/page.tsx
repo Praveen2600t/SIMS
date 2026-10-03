@@ -75,17 +75,17 @@ export default function CSVManagerPage() {
   return (
     <AppLayout
       title="CSV Dataset Hub & Import Engine"
-      subtitle="Tamil Nadu Retail Dataset Import, Duplicate Detection & Schema Validation"
+      subtitle="Multi-Sector Inventory Dataset Import, Duplicate Detection & Schema Validation"
     >
       <div className="space-y-6">
-        {/* Notice Card: Synthetic Data Disclaimer */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 text-xs text-amber-900">
+        {/* Notice Card: Generic Dataset Information */}
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 text-xs text-indigo-900">
           <div className="flex items-start gap-2.5">
-            <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Sample & Synthetic Data Disclosure:</span>
-              <p className="mt-0.5 text-amber-800">
-                All pre-seeded prices, supplier names, stock quantities, and mandi market quotations in this demo system are realistic synthetic representations for testing and research. They do not constitute verified official APMC quotes.
+              <span className="font-bold">General Inventory Dataset Specifications:</span>
+              <p className="mt-0.5 text-indigo-800">
+                The import engine accepts multi-sector product inventories (Electronics, Pharmaceuticals, Raw Materials, FMCG, Hardware, Automotive, Chemicals, etc.). Expiry dates are evaluated for perishable batches and optional for non-perishable goods. Existing SKU records are updated with transactional audit logs.
               </p>
             </div>
           </div>
@@ -101,7 +101,7 @@ export default function CSVManagerPage() {
                   <Download className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-slate-900">Download Tamil Nadu Datasets</h2>
+                  <h2 className="text-sm font-bold text-slate-900">Download General Datasets</h2>
                   <p className="text-xs text-slate-500">Download formatted CSV datasets ready for import</p>
                 </div>
               </div>
@@ -111,15 +111,15 @@ export default function CSVManagerPage() {
                 <div className="rounded-lg border border-slate-200 p-3.5 flex items-center justify-between">
                   <div>
                     <h3 className="text-xs font-bold text-slate-900">
-                      Standard 220-Product Mandi Sample Dataset
+                      Standard 200-Item Multi-Sector Sample Dataset
                     </h3>
                     <p className="text-[11px] text-slate-500">
-                      Contains 10 Tamil Nadu product categories, 18 districts, batch expiry dates
+                      Contains 10 industrial & commercial categories, 10 warehouse storage zones, batch expiry tracking
                     </p>
                   </div>
                   <a
-                    href="/data/tamilnadu_inventory_sample_200.csv"
-                    download="tamilnadu_inventory_sample_200.csv"
+                    href="/data/general_inventory_sample_200.csv"
+                    download="general_inventory_sample_200.csv"
                     className="flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 shrink-0 shadow-xs"
                   >
                     <Download className="h-3.5 w-3.5" />
@@ -148,7 +148,7 @@ export default function CSVManagerPage() {
             </div>
 
             <div className="mt-6 border-t border-slate-100 pt-4 text-[11px] text-slate-400">
-              Field mapping includes: product_code, name, category, unit, district, market_location, supplier_id, purchase_price, selling_price, current_quantity, min_stock, batch_number, expiry_date.
+              Field mapping includes: product_code, name, category, unit, storage_location, supplier_id, purchase_price, selling_price, current_quantity, min_stock, batch_number, expiry_date.
             </div>
           </div>
 
@@ -173,7 +173,7 @@ export default function CSVManagerPage() {
                   {file ? file.name : "Select or drag a CSV file here"}
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Supports .csv with standard Tamil Nadu inventory columns
+                  Supports RFC-4180 .csv with standard inventory columns
                 </p>
                 <input
                   type="file"

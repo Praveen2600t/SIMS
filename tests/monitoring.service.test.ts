@@ -58,8 +58,8 @@ describe("Continuous Monitoring Engine & Anomaly Detection", () => {
         unit: "packet",
         currentQuantity: 40,
         minStockLevel: 10,
-        district: "Coimbatore",
-        marketLocation: "MGR Wholesale Vegetable Mandi",
+        storageLocation: "Cold Storage Vault 01 (2-8°C)",
+        storageType: "COLD_STORAGE",
       },
     });
     expiringProductId = pExp.id;

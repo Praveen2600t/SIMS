@@ -63,7 +63,7 @@ export default function SuppliersPage() {
   const [newPOForm, setNewPOForm] = useState({
     supplierId: "",
     expectedDeliveryDate: "",
-    notes: "Weekly wholesale procurement for mandi",
+    notes: "Restock requisition order for warehouse facility",
     items: [{ productId: "", quantity: 100, unitCost: 40 }],
   });
 
@@ -154,7 +154,7 @@ export default function SuppliersPage() {
     po.items.forEach((item) => {
       initialBatchMap[item.id] = {
         qty: Math.max(0, item.quantity - item.receivedQuantity),
-        batchNo: `TN-RCV-${Date.now().toString().slice(-5)}`,
+        batchNo: `RCV-${Date.now().toString().slice(-5)}`,
         expiry: "",
       };
     });
@@ -200,7 +200,7 @@ export default function SuppliersPage() {
   return (
     <AppLayout
       title="Suppliers & Procurement Orders"
-      subtitle="Tamil Nadu Regional Suppliers & Goods Receipt Verification"
+      subtitle="Industrial & Commercial Suppliers & Goods Receipt Verification"
       onRefresh={activeTab === "orders" ? fetchOrders : fetchSuppliers}
     >
       <div className="space-y-4">
@@ -228,7 +228,7 @@ export default function SuppliersPage() {
               }`}
             >
               <Building2 className="h-4 w-4" />
-              <span>Registered TN Suppliers</span>
+              <span>Registered Suppliers</span>
             </button>
           </div>
 
@@ -361,7 +361,7 @@ export default function SuppliersPage() {
                 <div className="mt-3 space-y-1.5 text-xs text-slate-600">
                   <div className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                    <span>{s.district} District, Tamil Nadu</span>
+                    <span>{s.address || s.district}</span>
                   </div>
                   {s.phone && (
                     <div className="flex items-center gap-1.5">
@@ -379,7 +379,7 @@ export default function SuppliersPage() {
 
                 {s.isSampleData && (
                   <div className="mt-3 border-t border-slate-100 pt-2 text-[10px] text-slate-400 italic">
-                    Sample Tamil Nadu Mandi Supplier (Demo)
+                    Verified Industrial Supplier
                   </div>
                 )}
               </div>

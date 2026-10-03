@@ -4,11 +4,13 @@ import { AlertType, AlertSeverity, AlertStatus } from "@prisma/client";
 export interface MonitoringConfig {
   expiryWarningDays: number;
   anomalyDropPercentage: number;
+  rapidAdjustmentLimit: number;
 }
 
 export const DEFAULT_MONITORING_CONFIG: MonitoringConfig = {
-  expiryWarningDays: 7,
-  anomalyDropPercentage: 40,
+  expiryWarningDays: 14,
+  anomalyDropPercentage: 35,
+  rapidAdjustmentLimit: 3,
 };
 
 export interface MonitoringRunResult {
@@ -22,15 +24,38 @@ export interface MonitoringRunResult {
 }
 
 /**
- * Continuous Inventory Monitoring Service
- * Evaluates stock thresholds, expiry timelines, and statistical/rule anomalies.
- * Designed for serverless and background worker invocation.
+ * Smart Inventory Continuous Monitoring Service
+ * Evaluates stock thresholds, batch expiry timelines, and statistical/rule anomalies.
+ * Operates on a generic, multi-sector inventory dataset.
  */
 export class MonitoringService {
   /**
-   * Run full system evaluation
+   * Fetches active system settings or returns defaults
    */
-  static async evaluateAll(config: MonitoringConfig = DEFAULT_MONITORING_CONFIG): Promise<MonitoringRunResult> {
+  static async getConfig(): Promise<MonitoringConfig> {
+    try {
+      const settings = await prisma.systemSetting.findMany();
+      const config = { ...DEFAULT_MONITORING_CONFIG };
+
+      for (const s of settings) {
+        if (s.key === "expiryWarningDays") config.expiryWarningDays = parseInt(s.value, 10) || 14;
+        if (s.key === "anomalyDropPercentage") config.anomalyDropPercentage = parseInt(s.value, 10) || 35;
+        if (s.key === "rapidAdjustmentLimit") config.rapidAdjustmentLimit = parseInt(s.value, 10) || 3;
+      }
+
+      return config;
+    } catch {
+      return DEFAULT_MONITORING_CONFIG;
+    }
+  }
+
+  /**
+   * Run full system continuous monitoring evaluation
+   */
+  static async evaluateAll(customConfig?: Partial<MonitoringConfig>): Promise<MonitoringRunResult> {
+    const baseConfig = await this.getConfig();
+    const config: MonitoringConfig = { ...baseConfig, ...customConfig };
+
     const details: string[] = [];
     let alertsCreated = 0;
     let alertsResolved = 0;
@@ -40,18 +65,17 @@ export class MonitoringService {
     const expiryThresholdDate = new Date();
     expiryThresholdDate.setDate(now.getDate() + config.expiryWarningDays);
 
-    // 1. Fetch active products with their batches and recent movements
+    // Fetch active products with their batches and recent movements
     const products = await prisma.product.findMany({
       where: { isArchived: false },
       include: {
         batches: {
           where: {
             quantity: { gt: 0 },
-            status: "ACTIVE",
           },
         },
         stockMovements: {
-          take: 5,
+          take: 6,
           orderBy: { createdAt: "desc" },
         },
         alerts: {
@@ -64,7 +88,7 @@ export class MonitoringService {
       const openAlerts = product.alerts;
 
       // ----------------------------------------------------
-      // A. OUT OF STOCK CHECK
+      // 1. OUT OF STOCK DETECTION (Quantity <= 0)
       // ----------------------------------------------------
       const existingOutOfStockAlert = openAlerts.find((a) => a.alertType === "OUT_OF_STOCK");
 
@@ -76,13 +100,13 @@ export class MonitoringService {
               alertType: "OUT_OF_STOCK",
               severity: "CRITICAL",
               status: "OPEN",
-              message: `Product [${product.name}] is completely OUT OF STOCK at ${product.marketLocation}, ${product.district}.`,
+              message: `Item [${product.name}] (SKU: ${product.productCode}) is completely OUT OF STOCK at ${product.storageLocation || "Main Facility"}.`,
+              recommendedAction: `Create an immediate replenishment purchase order for target quantity (${product.reorderQuantity} ${product.unit}) to prevent operational disruption.`,
               detailsJson: JSON.stringify({
                 currentQuantity: product.currentQuantity,
                 minStockLevel: product.minStockLevel,
                 reorderQuantity: product.reorderQuantity,
-                district: product.district,
-                marketLocation: product.marketLocation,
+                storageLocation: product.storageLocation,
               }),
             },
           });
@@ -90,13 +114,13 @@ export class MonitoringService {
           details.push(`Created OUT_OF_STOCK alert for ${product.name}`);
         }
       } else if (existingOutOfStockAlert) {
-        // Stock has been replenished, resolve existing out of stock alert
+        // Condition rectified, auto-resolve
         await prisma.alert.update({
           where: { id: existingOutOfStockAlert.id },
           data: {
             status: "RESOLVED",
             resolvedAt: new Date(),
-            message: `${existingOutOfStockAlert.message} [AUTO-RESOLVED: Stock replenished to ${product.currentQuantity} ${product.unit}]`,
+            message: `${existingOutOfStockAlert.message} [AUTO-RESOLVED: Replenished to ${product.currentQuantity} ${product.unit}]`,
           },
         });
         alertsResolved++;
@@ -104,7 +128,7 @@ export class MonitoringService {
       }
 
       // ----------------------------------------------------
-      // B. LOW STOCK CHECK (Only if > 0 and <= minStockLevel)
+      // 2. LOW STOCK MONITORING (0 < Quantity <= minStockLevel)
       // ----------------------------------------------------
       const existingLowStockAlert = openAlerts.find((a) => a.alertType === "LOW_STOCK");
 
@@ -116,13 +140,13 @@ export class MonitoringService {
               alertType: "LOW_STOCK",
               severity: "HIGH",
               status: "OPEN",
-              message: `Product [${product.name}] has fallen below threshold (${product.currentQuantity} ${product.unit} remaining, Min: ${product.minStockLevel}).`,
+              message: `Item [${product.name}] has fallen below threshold (${product.currentQuantity} ${product.unit} remaining, Min: ${product.minStockLevel} ${product.unit}).`,
+              recommendedAction: `Issue reorder requisition for ${product.reorderQuantity} ${product.unit} before stock exhausts.`,
               detailsJson: JSON.stringify({
                 currentQuantity: product.currentQuantity,
                 minStockLevel: product.minStockLevel,
                 reorderQuantity: product.reorderQuantity,
-                district: product.district,
-                marketLocation: product.marketLocation,
+                storageLocation: product.storageLocation,
               }),
             },
           });
@@ -130,13 +154,12 @@ export class MonitoringService {
           details.push(`Created LOW_STOCK alert for ${product.name}`);
         }
       } else if (existingLowStockAlert && product.currentQuantity > product.minStockLevel) {
-        // Condition no longer holds
         await prisma.alert.update({
           where: { id: existingLowStockAlert.id },
           data: {
             status: "RESOLVED",
             resolvedAt: new Date(),
-            message: `${existingLowStockAlert.message} [AUTO-RESOLVED: Stock above minimum (${product.currentQuantity} ${product.unit})]`,
+            message: `${existingLowStockAlert.message} [AUTO-RESOLVED: Current stock (${product.currentQuantity} ${product.unit}) is above threshold]`,
           },
         });
         alertsResolved++;
@@ -144,7 +167,7 @@ export class MonitoringService {
       }
 
       // ----------------------------------------------------
-      // C. BATCH-LEVEL EXPIRY CHECKS
+      // 3. BATCH EXPIRY SURVEILLANCE
       // ----------------------------------------------------
       for (const batch of product.batches) {
         if (!batch.expiryDate) continue;
@@ -156,7 +179,6 @@ export class MonitoringService {
 
         if (isExpired) {
           if (!existingBatchAlert || existingBatchAlert.alertType !== "EXPIRED") {
-            // Update batch status to EXPIRED
             await prisma.inventoryBatch.update({
               where: { id: batch.id },
               data: { status: "EXPIRED" },
@@ -169,7 +191,8 @@ export class MonitoringService {
                 alertType: "EXPIRED",
                 severity: "CRITICAL",
                 status: "OPEN",
-                message: `Batch [${batch.batchNumber}] of ${product.name} expired on ${batch.expiryDate.toISOString().split("T")[0]}. Quantity at risk: ${batch.quantity} ${product.unit}.`,
+                message: `Lot/Batch [${batch.batchNumber}] of ${product.name} expired on ${batch.expiryDate.toISOString().split("T")[0]}. Affected quantity: ${batch.quantity} ${product.unit}.`,
+                recommendedAction: `Quarantine batch immediately from active pick locations and process return or write-off documentation.`,
                 detailsJson: JSON.stringify({
                   batchNumber: batch.batchNumber,
                   expiryDate: batch.expiryDate,
@@ -191,7 +214,8 @@ export class MonitoringService {
                 alertType: "EXPIRY_WARNING",
                 severity: "HIGH",
                 status: "OPEN",
-                message: `Batch [${batch.batchNumber}] of ${product.name} expires in ${daysLeft} days (${batch.expiryDate.toISOString().split("T")[0]}). Stock: ${batch.quantity} ${product.unit}.`,
+                message: `Batch [${batch.batchNumber}] of ${product.name} expires in ${daysLeft} days (${batch.expiryDate.toISOString().split("T")[0]}). Quantity at risk: ${batch.quantity} ${product.unit}.`,
+                recommendedAction: `Prioritize outbound dispatches (FIFO / FEFO) to utilize remaining stock prior to expiration.`,
                 detailsJson: JSON.stringify({
                   batchNumber: batch.batchNumber,
                   expiryDate: batch.expiryDate,
@@ -207,24 +231,24 @@ export class MonitoringService {
       }
 
       // ----------------------------------------------------
-      // D. RULE-BASED INVENTORY ANOMALY DETECTION
+      // 4. INVENTORY ANOMALY DETECTION
       // ----------------------------------------------------
-      // Rule 1: Sudden large single-movement reduction (> 40% of previous stock without sale)
-      // Rule 2: Repeated rapid manual adjustments (>= 3 manual adjustments within recent movements)
+      // Anomaly Rule A: Rapid manual adjustments
       const manualAdjustments = product.stockMovements.filter((m) => m.movementType === "ADJUSTMENT");
       const existingAnomalyAlert = openAlerts.find((a) => a.alertType === "ANOMALY_REVIEW");
 
-      if (manualAdjustments.length >= 3 && !existingAnomalyAlert) {
+      if (manualAdjustments.length >= config.rapidAdjustmentLimit && !existingAnomalyAlert) {
         await prisma.alert.create({
           data: {
             productId: product.id,
             alertType: "ANOMALY_REVIEW",
             severity: "HIGH",
             status: "OPEN",
-            message: `Frequent manual inventory adjustments detected for [${product.name}] (${manualAdjustments.length} in recent history). Recommended for supervisor audit.`,
+            message: `Unusual adjustment frequency: Product [${product.name}] has had ${manualAdjustments.length} manual adjustments in recent movements.`,
+            recommendedAction: `Audit recent reconciliation logs and initiate physical supervisor cycle count to identify root cause.`,
             detailsJson: JSON.stringify({
               adjustmentsCount: manualAdjustments.length,
-              recentMovementIds: manualAdjustments.map((m) => m.id),
+              movementIds: manualAdjustments.map((m) => m.id),
             }),
           },
         });
@@ -233,7 +257,7 @@ export class MonitoringService {
         details.push(`Detected ANOMALY: Frequent adjustments on ${product.name}`);
       }
 
-      // Check sudden large reduction without a recorded sale
+      // Anomaly Rule B: Sudden sharp deduction without sales order
       const latestMovement = product.stockMovements[0];
       if (
         latestMovement &&
@@ -242,13 +266,15 @@ export class MonitoringService {
         latestMovement.quantity >= latestMovement.previousQuantity * (config.anomalyDropPercentage / 100) &&
         !existingAnomalyAlert
       ) {
+        const dropPercent = Math.round((latestMovement.quantity / latestMovement.previousQuantity) * 100);
         await prisma.alert.create({
           data: {
             productId: product.id,
             alertType: "ANOMALY_REVIEW",
             severity: "MEDIUM",
             status: "OPEN",
-            message: `Sudden sharp quantity deduction of ${latestMovement.quantity} ${product.unit} (${Math.round((latestMovement.quantity / latestMovement.previousQuantity) * 100)}% of stock) on [${product.name}].`,
+            message: `Sudden inventory drop: Single deduction of ${latestMovement.quantity} ${product.unit} (${dropPercent}% of stock) on [${product.name}] without sales invoice.`,
+            recommendedAction: `Review dispatch manifest and check for accidental double-entry or shrinkage.`,
             detailsJson: JSON.stringify({
               deduction: latestMovement.quantity,
               previousQuantity: latestMovement.previousQuantity,
@@ -274,22 +300,20 @@ export class MonitoringService {
   }
 
   /**
-   * Evaluates a single product immediately following a stock mutation
+   * Real-time evaluation triggered immediately upon a product's stock mutation
    */
   static async evaluateProduct(productId: string): Promise<void> {
     const product = await prisma.product.findUnique({
       where: { id: productId },
       include: {
-        batches: {
-          where: { quantity: { gt: 0 }, status: "ACTIVE" },
-        },
+        batches: { where: { quantity: { gt: 0 } } },
         alerts: { where: { status: "OPEN" } },
       },
     });
 
     if (!product) return;
 
-    // Check OUT_OF_STOCK
+    // Check Out of Stock
     const existingOutOfStock = product.alerts.find((a) => a.alertType === "OUT_OF_STOCK");
     if (product.currentQuantity <= 0) {
       if (!existingOutOfStock) {
@@ -299,7 +323,8 @@ export class MonitoringService {
             alertType: "OUT_OF_STOCK",
             severity: "CRITICAL",
             status: "OPEN",
-            message: `Product [${product.name}] is OUT OF STOCK.`,
+            message: `Item [${product.name}] is OUT OF STOCK.`,
+            recommendedAction: `Issue emergency replenishment order immediately.`,
           },
         });
       }
@@ -314,7 +339,7 @@ export class MonitoringService {
       });
     }
 
-    // Check LOW_STOCK
+    // Check Low Stock
     const existingLowStock = product.alerts.find((a) => a.alertType === "LOW_STOCK");
     if (product.currentQuantity > 0 && product.currentQuantity <= product.minStockLevel) {
       if (!existingLowStock) {
@@ -324,7 +349,8 @@ export class MonitoringService {
             alertType: "LOW_STOCK",
             severity: "HIGH",
             status: "OPEN",
-            message: `Product [${product.name}] is low on stock (${product.currentQuantity} ${product.unit}).`,
+            message: `Item [${product.name}] is low on stock (${product.currentQuantity} ${product.unit} remaining).`,
+            recommendedAction: `Reorder ${product.reorderQuantity} ${product.unit} to meet target stock.`,
           },
         });
       }
@@ -334,7 +360,7 @@ export class MonitoringService {
         data: {
           status: "RESOLVED",
           resolvedAt: new Date(),
-          message: `${existingLowStock.message} [AUTO-RESOLVED: Stock is ${product.currentQuantity}]`,
+          message: `${existingLowStock.message} [AUTO-RESOLVED: Current stock (${product.currentQuantity}) is healthy]`,
         },
       });
     }

@@ -14,6 +14,10 @@ import {
   Play,
   ShieldAlert,
   Info,
+  Sliders,
+  Warehouse,
+  X,
+  Save,
 } from "lucide-react";
 
 interface AlertItem {
@@ -22,6 +26,7 @@ interface AlertItem {
   severity: string;
   status: string;
   message: string;
+  recommendedAction?: string | null;
   detailsJson?: string | null;
   createdAt: string;
   resolvedAt?: string | null;
@@ -32,8 +37,7 @@ interface AlertItem {
     unit: string;
     currentQuantity: number;
     minStockLevel: number;
-    district: string;
-    marketLocation: string;
+    storageLocation?: string | null;
   } | null;
   batch?: {
     id: string;
@@ -44,6 +48,12 @@ interface AlertItem {
   resolvedBy?: { name: string; role: string } | null;
 }
 
+interface MonitoringConfig {
+  expiryWarningDays: number;
+  anomalyDropPercentage: number;
+  rapidAdjustmentLimit: number;
+}
+
 export default function MonitoringPage() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +62,16 @@ export default function MonitoringPage() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evalResult, setEvalResult] = useState<string | null>(null);
+
+  // Settings State
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [config, setConfig] = useState<MonitoringConfig>({
+    expiryWarningDays: 14,
+    anomalyDropPercentage: 35,
+    rapidAdjustmentLimit: 3,
+  });
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [configMsg, setConfigMsg] = useState<string | null>(null);
 
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
@@ -75,9 +95,49 @@ export default function MonitoringPage() {
     }
   }, [statusFilter, severityFilter, typeFilter]);
 
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/monitoring/settings");
+      const json = await res.json();
+      if (res.ok && json.config) {
+        setConfig(json.config);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     fetchAlerts();
-  }, [fetchAlerts]);
+    fetchSettings();
+  }, [fetchAlerts, fetchSettings]);
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfig(true);
+    setConfigMsg(null);
+    try {
+      const res = await fetch("/api/monitoring/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setConfigMsg("Monitoring rules updated successfully! Running evaluation with new rules...");
+        setTimeout(() => {
+          setIsConfigOpen(false);
+          handleRunEvaluation();
+        }, 800);
+      } else {
+        setConfigMsg(data.error || "Failed to update rules");
+      }
+    } catch {
+      setConfigMsg("Failed to update monitoring rules");
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
 
   const handleResolveAlert = async (id: string, action: "RESOLVE" | "ACKNOWLEDGE") => {
     try {
@@ -119,11 +179,11 @@ export default function MonitoringPage() {
   return (
     <AppLayout
       title="Continuous Inventory Monitoring Engine"
-      subtitle="Autonomous Rule-Based Anomaly Detection & State Stock Auditing"
+      subtitle="Autonomous Rule-Based Surveillance, Stock Auditing & Anomaly Detection"
       onRefresh={fetchAlerts}
     >
       <div className="space-y-4">
-        {/* Engine Status & Manual Trigger Header */}
+        {/* Engine Status, Settings & Manual Trigger Bar */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
@@ -134,11 +194,19 @@ export default function MonitoringPage() {
                 </h2>
               </div>
               <p className="mt-1 text-xs text-slate-500 max-w-xl">
-                Continuous background auditing automatically monitors zero stock (OUT_OF_STOCK), threshold breaches (LOW_STOCK), perishable expiration timelines (EXPIRY_WARNING / EXPIRED), and sudden reductions or frequent adjustments (ANOMALY_REVIEW).
+                Background monitoring evaluates zero stock (<span className="font-mono text-slate-700">OUT_OF_STOCK</span>), threshold breaches (<span className="font-mono text-slate-700">LOW_STOCK</span>), perishable expiration timelines (<span className="font-mono text-slate-700">EXPIRY_WARNING / EXPIRED</span>), and sudden deductions or rapid manual adjustments (<span className="font-mono text-slate-700">ANOMALY_REVIEW</span>).
               </p>
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsConfigOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+              >
+                <Sliders className="h-3.5 w-3.5 text-slate-500" />
+                <span>Configure Rules</span>
+              </button>
+
               <button
                 onClick={handleRunEvaluation}
                 disabled={isEvaluating}
@@ -168,13 +236,26 @@ export default function MonitoringPage() {
             <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold text-indigo-900">Explainable Anomaly Rules in Action:</span>
-              <p className="mt-0.5 text-indigo-800 leading-relaxed">
-                1) <strong>Sudden Quantity Drop:</strong> Triggers when an outbound deduction exceeds 40% of current inventory in a single movement without a recorded customer invoice.
-                <br />
-                2) <strong>Frequent Manual Adjustments:</strong> Flags products with 3+ manual audit corrections in recent history for supervisor review.
-                <br />
-                3) <strong>Batch Expiry Escalation:</strong> Perishable batches with ≤ 7 days shelf-life automatically alert mandis before reaching 0-day write-off.
-              </p>
+              <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-3 text-indigo-800">
+                <div className="rounded-lg bg-white/70 p-2.5 border border-indigo-100/50">
+                  <strong>1) Sudden Stock Drop:</strong>
+                  <p className="mt-0.5 text-[11px] text-slate-600">
+                    Triggers when single-movement deduction exceeds {config.anomalyDropPercentage}% of available balance without an outbound dispatch order.
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white/70 p-2.5 border border-indigo-100/50">
+                  <strong>2) Rapid Manual Adjustments:</strong>
+                  <p className="mt-0.5 text-[11px] text-slate-600">
+                    Flags items exceeding {config.rapidAdjustmentLimit} manual quantity corrections in recent history for supervisory investigation.
+                  </p>
+                </div>
+                <div className="rounded-lg bg-white/70 p-2.5 border border-indigo-100/50">
+                  <strong>3) Perishable Expiry Horizon:</strong>
+                  <p className="mt-0.5 text-[11px] text-slate-600">
+                    Batches with shelf-life under {config.expiryWarningDays} days automatically generate re-allocation or discount dispatch alerts.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -237,8 +318,8 @@ export default function MonitoringPage() {
                 <tr>
                   <th className="py-3 px-4">Severity</th>
                   <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4">Alert Message & Product</th>
-                  <th className="py-3 px-4">Market / District</th>
+                  <th className="py-3 px-4">Alert Details & Recommended Action</th>
+                  <th className="py-3 px-4">Storage Location</th>
                   <th className="py-3 px-4">Triggered At</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -279,26 +360,25 @@ export default function MonitoringPage() {
                         <td className="py-3 px-4 font-mono font-bold text-slate-900">
                           {al.alertType}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 max-w-md">
                           <p className="font-semibold text-slate-900 leading-snug">{al.message}</p>
+                          {al.recommendedAction && (
+                            <div className="mt-1 rounded bg-amber-50/80 border border-amber-200/60 px-2 py-1 text-[11px] font-medium text-amber-900">
+                              <span className="font-bold">Recommended Action:</span> {al.recommendedAction}
+                            </div>
+                          )}
                           {al.product && (
-                            <span className="text-[11px] text-slate-400">
-                              SKU: {al.product.productCode} • Stock: {al.product.currentQuantity}{" "}
+                            <span className="text-[10px] text-slate-400 block mt-1">
+                              SKU: {al.product.productCode} • Available: {al.product.currentQuantity}{" "}
                               {al.product.unit} (Min: {al.product.minStockLevel})
                             </span>
                           )}
                         </td>
                         <td className="py-3 px-4 text-slate-600">
-                          {al.product ? (
-                            <div>
-                              <div className="font-medium text-slate-800">{al.product.district}</div>
-                              <span className="text-[10px] text-slate-400">
-                                {al.product.marketLocation}
-                              </span>
-                            </div>
-                          ) : (
-                            "Statewide / Batch"
-                          )}
+                          <div className="flex items-center gap-1 font-medium text-slate-800">
+                            <Warehouse className="h-3 w-3 text-emerald-600 shrink-0" />
+                            <span className="truncate max-w-[160px]">{al.product?.storageLocation || "Warehouse Facility"}</span>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
                           {formatDate(al.createdAt)}
@@ -334,6 +414,112 @@ export default function MonitoringPage() {
           </div>
         </div>
       </div>
+
+      {/* Configurable Monitoring Rules Modal */}
+      {isConfigOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-emerald-600" />
+                <h2 className="text-base font-bold text-slate-900">Configurable Monitoring Rules</h2>
+              </div>
+              <button
+                onClick={() => setIsConfigOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveConfig} className="mt-4 space-y-4 text-xs">
+              {configMsg && (
+                <div className="rounded-lg bg-emerald-50 p-2.5 text-emerald-800 border border-emerald-200">
+                  {configMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Expiry Warning Horizon (Days)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={180}
+                  required
+                  value={config.expiryWarningDays}
+                  onChange={(e) =>
+                    setConfig({ ...config, expiryWarningDays: parseInt(e.target.value) || 14 })
+                  }
+                  className="w-full rounded-lg border border-slate-200 p-2 text-slate-900"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Flag perishable lots approaching expiry within this threshold.
+                </span>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Anomaly Drop Percentage (%)
+                </label>
+                <input
+                  type="number"
+                  min={10}
+                  max={95}
+                  required
+                  value={config.anomalyDropPercentage}
+                  onChange={(e) =>
+                    setConfig({ ...config, anomalyDropPercentage: parseInt(e.target.value) || 35 })
+                  }
+                  className="w-full rounded-lg border border-slate-200 p-2 text-slate-900"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Flag sudden outbound stock reductions that exceed this % of current balance.
+                </span>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Rapid Adjustments Threshold
+                </label>
+                <input
+                  type="number"
+                  min={2}
+                  max={20}
+                  required
+                  value={config.rapidAdjustmentLimit}
+                  onChange={(e) =>
+                    setConfig({ ...config, rapidAdjustmentLimit: parseInt(e.target.value) || 3 })
+                  }
+                  className="w-full rounded-lg border border-slate-200 p-2 text-slate-900"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Flag SKUs with manual adjustments exceeding this count within 24 hours.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsConfigOpen(false)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingConfig}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  <span>{isSavingConfig ? "Saving..." : "Save & Re-evaluate"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

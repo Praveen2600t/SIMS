@@ -1,28 +1,28 @@
 import { PrismaClient, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { generateDataset, TAMIL_NADU_DISTRICTS, TAMIL_NADU_SUPPLIERS } from "./generate-dataset";
+import { generateGenericDataset, GENERIC_WAREHOUSES, GENERIC_SUPPLIERS } from "./generate-dataset";
 import { MonitoringService } from "../src/services/monitoring.service";
 
 const prisma = new PrismaClient();
 
 const CATEGORY_DEFINITIONS = [
-  { code: "CAT_VEG", name: "Vegetables", description: "Fresh agricultural vegetables from Tamil Nadu mandis" },
-  { code: "CAT_FRUIT", name: "Fruits", description: "Tropical and hill-grown fruits across Tamil Nadu districts" },
-  { code: "CAT_BEV", name: "Beverages", description: "Natural tender coconuts, regional teas, coffees, and soft drinks" },
-  { code: "CAT_FFI", name: "Fast-food ingredients", description: "Buns, crusts, sauces, cheese, fries, and cooking oils" },
-  { code: "CAT_GRAIN", name: "Grains and staples", description: "Traditional paddy varieties, millets, dals, and flours" },
-  { code: "CAT_DAIRY", name: "Dairy", description: "Fresh milk, curd, ghee, paneer, and butter products" },
-  { code: "CAT_BAKE", name: "Bakery products", description: "Breads, rusks, cakes, and baking ingredients" },
-  { code: "CAT_SPICE", name: "Spices and condiments", description: "Erode turmeric, dry chillies, whole spices, and salts" },
-  { code: "CAT_MEAT", name: "Meat and frozen food", description: "Poultry, mutton, coastal sea catches, and frozen veggies" },
-  { code: "CAT_GROC", name: "Grocery and packaged foods", description: "Sugar, jaggery, cooking oils, appalams, and batters" },
+  { code: "CAT_ELEC", name: "Electronics", description: "Microcontrollers, semiconductors, sensors, power modules" },
+  { code: "CAT_MED", name: "Pharmaceuticals", description: "Medicines, sterile supplies, vaccines, medical devices" },
+  { code: "CAT_RAW", name: "Industrial Raw Materials", description: "Metals, copper, polymers, sheet metal, structural tubing" },
+  { code: "CAT_FMCG", name: "Consumer Goods", description: "Cleaning chemicals, detergents, personal care products" },
+  { code: "CAT_FOOD", name: "Food & Perishables", description: "Baking ingredients, dairy batches, concentrates, flours" },
+  { code: "CAT_AUTO", name: "Automotive Parts", description: "Braking systems, fluids, filters, spark plugs" },
+  { code: "CAT_LAB", name: "Laboratory Chemicals", description: "Analytical solvents, reagents, buffers, laboratory glassware" },
+  { code: "CAT_PKG", name: "Packaging Supplies", description: "Corrugated boxes, stretch films, thermal barcode labels" },
+  { code: "CAT_HRD", name: "Hardware & Tools", description: "Fasteners, drill bits, ratchet straps, precision metrology" },
+  { code: "CAT_OFC", name: "Office Supplies", description: "Laser toner cartridges, copy paper, logistics hardware" },
 ];
 
 async function main() {
-  console.log("🌱 Starting SICMS Database Seeding...");
+  console.log("🌱 Starting General Smart Inventory System (SICMS) Database Seeding...");
 
-  // 1. Clear existing transactional data in proper order (for clean idempotency)
-  console.log("Cleaning old test data...");
+  // 1. Clear existing transactional data in proper order
+  console.log("Cleaning old data...");
   await prisma.auditLog.deleteMany();
   await prisma.alert.deleteMany();
   await prisma.saleItem.deleteMany();
@@ -35,17 +35,28 @@ async function main() {
   await prisma.supplier.deleteMany();
   await prisma.location.deleteMany();
   await prisma.category.deleteMany();
+  await prisma.systemSetting.deleteMany();
   await prisma.user.deleteMany();
 
-  // 2. Seed Users
-  console.log("Seeding default Administrator and Staff users...");
+  // 2. Seed Default System Settings (Configurable Rules)
+  console.log("Seeding configurable monitoring rules...");
+  await prisma.systemSetting.createMany({
+    data: [
+      { key: "expiryWarningDays", value: "14", description: "Perishable batch expiry warning horizon (days)" },
+      { key: "anomalyDropPercentage", value: "35", description: "Sudden stock deduction anomaly trigger (%)" },
+      { key: "rapidAdjustmentLimit", value: "3", description: "Threshold for repeated manual stock audit alerts" },
+    ],
+  });
+
+  // 3. Seed Users
+  console.log("Seeding Administrator and Inventory Officer users...");
   const adminPasswordHash = await bcrypt.hash("AdminPassword123!", 10);
   const staffPasswordHash = await bcrypt.hash("StaffPassword123!", 10);
 
   const adminUser = await prisma.user.create({
     data: {
-      email: "admin@sicms.tn.gov.in",
-      name: "Senthil Nathan (Admin)",
+      email: "admin@sicms.io",
+      name: "Marcus Vance (Inventory Manager)",
       passwordHash: adminPasswordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -54,8 +65,8 @@ async function main() {
 
   const staffUser = await prisma.user.create({
     data: {
-      email: "staff@sicms.tn.gov.in",
-      name: "Priya Murugan (Staff)",
+      email: "staff@sicms.io",
+      name: "Elena Rostova (Warehouse Supervisor)",
       passwordHash: staffPasswordHash,
       role: UserRole.STAFF,
       isActive: true,
@@ -64,7 +75,7 @@ async function main() {
 
   console.log(`Users seeded: Admin (${adminUser.email}), Staff (${staffUser.email})`);
 
-  // 3. Seed Categories
+  // 4. Seed Categories
   console.log("Seeding product categories...");
   const categoryMap = new Map<string, string>();
   for (const cat of CATEGORY_DEFINITIONS) {
@@ -74,39 +85,36 @@ async function main() {
     categoryMap.set(cat.name, created.id);
   }
 
-  // 4. Seed Locations
-  console.log("Seeding Tamil Nadu market locations...");
+  // 5. Seed Facilities / Warehouses
+  console.log("Seeding warehouse storage facilities...");
   const locationMap = new Map<string, string>();
-  for (const loc of TAMIL_NADU_DISTRICTS) {
-    const key = `${loc.district}_${loc.market}`;
-    if (!locationMap.has(key)) {
-      const created = await prisma.location.create({
-        data: {
-          name: `${loc.district} ${loc.market}`,
-          district: loc.district,
-          marketLocation: loc.market,
-          type: "CENTRAL_MARKET",
-          address: `${loc.market}, ${loc.district} District, Tamil Nadu, India`,
-        },
-      });
-      locationMap.set(key, created.id);
-    }
+  for (const wh of GENERIC_WAREHOUSES) {
+    const created = await prisma.location.create({
+      data: {
+        name: wh,
+        district: "Central Operations",
+        marketLocation: wh,
+        type: wh.includes("Cold") ? "COLD_STORAGE" : wh.includes("Hazmat") ? "HAZMAT" : "WAREHOUSE",
+        address: `${wh}, Logistics Park, Industrial Zone`,
+      },
+    });
+    locationMap.set(wh, created.id);
   }
 
-  // 5. Seed Suppliers
-  console.log("Seeding Tamil Nadu sample suppliers...");
+  // 6. Seed Suppliers
+  console.log("Seeding industrial and commercial suppliers...");
   const supplierMap = new Map<string, string>();
-  for (const sup of TAMIL_NADU_SUPPLIERS) {
+  for (const sup of GENERIC_SUPPLIERS) {
     const created = await prisma.supplier.create({
       data: {
         supplierCode: sup.code,
         name: sup.name,
-        contactPerson: `Manager (${sup.name})`,
-        email: `contact@${sup.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.sample.tn`,
-        phone: "+91 944" + Math.floor(1000000 + Math.random() * 9000000),
-        address: `Agri Business Complex, ${sup.district}, Tamil Nadu`,
-        district: sup.district,
-        rating: 4.5 + (Math.random() * 0.4),
+        contactPerson: `Account Rep (${sup.sector})`,
+        email: `orders@${sup.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+        phone: "+1 (800) 555-" + Math.floor(1000 + Math.random() * 9000),
+        address: `100 Enterprise Way, Suite 400`,
+        district: "National Distribution",
+        rating: 4.6 + (Math.random() * 0.3),
         isActive: true,
         isSampleData: true,
       },
@@ -114,15 +122,14 @@ async function main() {
     supplierMap.set(sup.code, created.id);
   }
 
-  // 6. Generate and Seed Products & Batches
-  console.log("Generating 220 Tamil Nadu product items...");
-  const dataset = generateDataset(220);
+  // 7. Generate and Seed Products & Batches
+  console.log("Generating 200 diverse inventory items across all categories...");
+  const dataset = generateGenericDataset(200);
 
   const productEntities = [];
   for (const item of dataset) {
     const categoryId = categoryMap.get(item.category) || Array.from(categoryMap.values())[0];
-    const locKey = `${item.district}_${item.market_location}`;
-    const locationId = locationMap.get(locKey) || Array.from(locationMap.values())[0];
+    const locationId = locationMap.get(item.storage_location) || Array.from(locationMap.values())[0];
     const supplierId = supplierMap.get(item.supplier_id) || Array.from(supplierMap.values())[0];
 
     const product = await prisma.product.create({
@@ -136,10 +143,12 @@ async function main() {
         sellingPrice: item.selling_price,
         currentQuantity: item.current_quantity,
         minStockLevel: item.minimum_stock_level,
+        maxStockLevel: item.maximum_stock_level,
         reorderQuantity: item.reorder_quantity,
+        storageLocation: item.storage_location,
         storageType: item.storage_type,
-        district: item.district,
-        marketLocation: item.market_location,
+        district: "Primary Warehouse",
+        marketLocation: item.storage_location,
         supplierId,
         locationId,
         dataSource: item.data_source,
@@ -149,7 +158,7 @@ async function main() {
 
     productEntities.push(product);
 
-    // Create batch if quantity > 0 or if expiry test case
+    // Create batch if product has initial quantity or test expiry
     const mfgDate = item.manufacture_date ? new Date(item.manufacture_date) : null;
     const expDate = item.expiry_date ? new Date(item.expiry_date) : null;
 
@@ -184,7 +193,7 @@ async function main() {
           previousQuantity: 0,
           newQuantity: item.current_quantity,
           reason: "Initial Inventory Baseline Load",
-          referenceType: "BASELINE_MIGRATION",
+          referenceType: "BASELINE_LOAD",
           unitPrice: item.purchase_price,
           performedByUserId: adminUser.id,
         },
@@ -192,119 +201,72 @@ async function main() {
     }
   }
 
-  console.log(`Seeded ${productEntities.length} products with batch records and baseline movements.`);
+  console.log(`Seeded ${productEntities.length} generic products with batches and stock movements.`);
 
-  // 7. Seed Sample Purchase Orders
-  console.log("Seeding sample Purchase Orders...");
-  const po1 = await prisma.purchaseOrder.create({
+  // 8. Seed Sample Procurement Orders
+  console.log("Seeding sample purchase orders...");
+  await prisma.purchaseOrder.create({
     data: {
-      orderNumber: "PO-TN-2026-001",
+      orderNumber: "PO-2026-00101",
       supplierId: Array.from(supplierMap.values())[0],
-      orderDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-      expectedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+      orderDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      expectedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       status: "APPROVED",
-      totalCost: 18500,
-      notes: "Weekly replenishment for Coimbatore Central Mandi",
+      totalCost: 28400,
+      notes: "Monthly replenishment for Central Assembly Depot",
       createdByUserId: adminUser.id,
       items: {
         create: [
           {
             productId: productEntities[0].id,
-            quantity: 200,
+            quantity: 100,
             receivedQuantity: 0,
             unitCost: productEntities[0].purchasePrice,
-            totalCost: productEntities[0].purchasePrice * 200,
+            totalCost: productEntities[0].purchasePrice * 100,
           },
           {
             productId: productEntities[1].id,
-            quantity: 150,
+            quantity: 80,
             receivedQuantity: 0,
             unitCost: productEntities[1].purchasePrice,
-            totalCost: productEntities[1].purchasePrice * 150,
+            totalCost: productEntities[1].purchasePrice * 80,
           },
         ],
       },
     },
   });
 
-  const po2 = await prisma.purchaseOrder.create({
+  // 9. Seed Sample Outbound Dispatches / Sales
+  console.log("Seeding sample outbound orders...");
+  await prisma.sale.create({
     data: {
-      orderNumber: "PO-TN-2026-002",
-      supplierId: Array.from(supplierMap.values())[1],
-      orderDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-      expectedDeliveryDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      status: "RECEIVED",
-      totalCost: 32400,
-      notes: "Spices dispatch received in full at George Town Hub",
-      createdByUserId: staffUser.id,
-      items: {
-        create: [
-          {
-            productId: productEntities[4].id,
-            quantity: 300,
-            receivedQuantity: 300,
-            unitCost: productEntities[4].purchasePrice,
-            totalCost: productEntities[4].purchasePrice * 300,
-          },
-        ],
-      },
-    },
-  });
-
-  // 8. Seed Sample Sales Orders
-  console.log("Seeding sample Sales transactions...");
-  const sale1 = await prisma.sale.create({
-    data: {
-      invoiceNumber: "INV-TN-2026-1001",
-      customerName: "Saravana Bhavan Kitchens",
-      customerPhone: "+91 98401 23456",
-      totalAmount: 4850,
+      invoiceNumber: "DISP-2026-0501",
+      customerName: "Global Engineering Labs Inc",
+      customerPhone: "+1 (555) 234-5678",
+      totalAmount: 14200,
       paymentStatus: "PAID",
-      paymentMethod: "UPI",
+      paymentMethod: "CREDIT",
       locationId: Array.from(locationMap.values())[0],
       createdByUserId: staffUser.id,
       items: {
         create: [
           {
-            productId: productEntities[1].id,
-            quantity: 50,
-            unitPrice: productEntities[1].sellingPrice,
-            totalPrice: productEntities[1].sellingPrice * 50,
+            productId: productEntities[0].id,
+            quantity: 20,
+            unitPrice: productEntities[0].sellingPrice,
+            totalPrice: productEntities[0].sellingPrice * 20,
           },
         ],
       },
     },
   });
 
-  const sale2 = await prisma.sale.create({
-    data: {
-      invoiceNumber: "INV-TN-2026-1002",
-      customerName: "Aachi Mess & Caterers",
-      customerPhone: "+91 98842 88899",
-      totalAmount: 8900,
-      paymentStatus: "PAID",
-      paymentMethod: "CASH",
-      locationId: Array.from(locationMap.values())[2],
-      createdByUserId: adminUser.id,
-      items: {
-        create: [
-          {
-            productId: productEntities[2].id,
-            quantity: 40,
-            unitPrice: productEntities[2].sellingPrice,
-            totalPrice: productEntities[2].sellingPrice * 40,
-          },
-        ],
-      },
-    },
-  });
-
-  // 9. Run Continuous Monitoring Engine to evaluate all products and seed alerts!
+  // 10. Run Continuous Monitoring Engine to evaluate all products and seed alerts!
   console.log("Running Continuous Monitoring Engine to evaluate alerts...");
   const monitoringResult = await MonitoringService.evaluateAll();
   console.log(`Monitoring complete: Evaluated ${monitoringResult.productsEvaluated} products, generated ${monitoringResult.alertsCreated} active alerts (${monitoringResult.anomaliesDetected} anomalies detected).`);
 
-  console.log("✅ Database seeding complete successfully!");
+  console.log("✅ General inventory database seeding completed successfully!");
 }
 
 main()

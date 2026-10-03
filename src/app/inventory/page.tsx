@@ -25,7 +25,7 @@ interface Movement {
   reason: string;
   referenceType?: string | null;
   createdAt: string;
-  product: { id: string; name: string; productCode: string; unit: string; district: string };
+  product: { id: string; name: string; productCode: string; unit: string; storageLocation?: string | null };
   batch?: { id: string; batchNumber: string; expiryDate?: string | null } | null;
   performedBy?: { name: string; role: string } | null;
 }
@@ -38,7 +38,7 @@ interface Batch {
   manufactureDate?: string | null;
   expiryDate?: string | null;
   status: string;
-  product: { id: string; name: string; productCode: string; unit: string; district: string };
+  product: { id: string; name: string; productCode: string; unit: string; storageLocation?: string | null };
 }
 
 export default function InventoryPage() {
@@ -258,7 +258,7 @@ export default function InventoryPage() {
             <button
               onClick={() => {
                 setModalType("ADJUST");
-                setModalForm((prev) => ({ ...prev, reason: "Physical Stock Mandi Audit" }));
+                setModalForm((prev) => ({ ...prev, reason: "Physical Inventory Cycle Count Audit" }));
                 setIsModalOpen(true);
               }}
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
@@ -332,7 +332,7 @@ export default function InventoryPage() {
                           <td className="py-3 px-4 font-semibold text-slate-900">
                             <div>{m.product.name}</div>
                             <span className="text-[10px] font-mono text-slate-400">
-                              {m.product.productCode} • {m.product.district}
+                              {m.product.productCode}
                             </span>
                           </td>
                           <td className="py-3 px-4">
@@ -417,8 +417,8 @@ export default function InventoryPage() {
                           </td>
                           <td className="py-3 px-4 font-medium text-slate-900">
                             <div>{b.product.name}</div>
-                            <span className="text-[10px] text-slate-400">
-                              {b.product.district}
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {b.product.productCode}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right font-bold text-slate-900">
